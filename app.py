@@ -15,6 +15,8 @@ from datetime import datetime, date
 import re
 from functools import wraps
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Load environment variables
 load_dotenv()
 
@@ -190,15 +192,18 @@ def serve_signup():
 def serve_html(filename):
     """Serve HTML files with proper UTF-8 encoding"""
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
+        file_path = os.path.join(BASE_DIR, filename)
+
+        with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
+
         response = make_response(content)
         response.headers['Content-Type'] = 'text/html; charset=utf-8'
-        # Prevent caching
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         return response
+
     except FileNotFoundError:
         return jsonify({"error": f"{filename} not found"}), 404
 

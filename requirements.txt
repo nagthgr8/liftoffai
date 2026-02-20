@@ -1,9 +1,21 @@
 Flask>=2.3.0
 Flask-CORS>=4.0.0
 python-dotenv>=1.0.0
+
+# OpenAI SDK
 openai>=1.0.0
+
+# PDF processing
 PyPDF2>=3.0.0
 pdfplumber>=0.10.0
-numpy>=1.24.0
-gunicorn>=21.0.0
 PyMuPDF>=1.23.0
+
+# HTTP & utilities
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Data handling
+numpy>=1.24.0
+
+# Production server
+gunicorn>=21.0.0

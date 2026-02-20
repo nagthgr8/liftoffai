@@ -122,6 +122,7 @@ function handleCredentialResponse(response) {
             // store user info locally for dashboard access
             localStorage.setItem('liftoffUser', JSON.stringify({
                 email: data.email,
+                username: data.username || '',
                 token: response.credential, // optional, in case you need it
                 timestamp: Date.now()       // optional, can use for expiry
             }));

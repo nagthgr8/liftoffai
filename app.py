@@ -188,6 +188,9 @@ def serve_login():
 @app.route('/signup.html')
 def serve_signup():
     return serve_html('signup.html')
+@app.route("/debug-files")
+def debug_files():
+    return jsonify(os.listdir(BASE_DIR))
 
 def serve_html(filename):
     """Serve HTML files with proper UTF-8 encoding"""

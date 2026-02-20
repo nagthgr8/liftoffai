@@ -152,8 +152,25 @@ def require_subscription(feature):
 # ============================================================================
 # HTML FILE SERVING (with proper UTF-8 encoding)
 # ============================================================================
-
+app.route('/verify_token', methods=['POST'])
+def verify_token():
+    data = request.json
+    token = data.get("id_token")
+    if not token:
+        return jsonify({"success": False, "error": "No token provided"}), 400
+    try:
+        # Verify token with Google
+        idinfo = id_token.verify_oauth2_token(token, grequests.Request(), GOOGLE_CLIENT_ID)
+        # idinfo now contains info about the user
+        # e.g., idinfo['email'], idinfo['name'], idinfo['sub']
+        return jsonify({"success": True, "email": idinfo.get("email")})
+    except ValueError as e:
+        # invalid token
+        return jsonify({"success": False, "error": str(e)}), 400
+    
 @app.route('/')
+@app.route('/dashboard')
+@app.route('/dashboard.html')
 def serve_dashboard():
     return serve_html('dashboard.html')
 

@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Library - LiftOff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="theme.js"></script>
+<script src="settings.js"></script>
+<script src="audio.js"></script>
+<script src="subscription.js"></script>
+<script src="library-save.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0a0f1a;
+    color: #e2e8f0;
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 240px;
+    background: rgba(15, 23, 42, 0.8);
+    height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+    border-right: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+    overflow-y: auto;
+}
+.sidebar h2 {
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+}
+.logo-emoji {
+    font-size: 36px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.nav-item {
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+.nav-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: translateX(5px);
+}
+.nav-item.active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+/* ── Main ── */
+.main {
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
+    max-height: 100vh;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 30px;
+}
+.page-header h1 { font-size: 26px; }
+.page-header p { color: #94a3b8; margin-top: 4px; font-size: 14px; }
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+.header-btn {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(71,85,105,0.4);
+    background: rgba(30,41,59,0.6);
+    color: #cbd5e1;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.header-btn:hover { border-color: #3b82f6; color: #60a5fa; }
+.header-btn.primary {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-color: transparent;
+    color: #fff;
+}
+.header-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(59,130,246,0.3); }
+
+/* ── Breadcrumb ── */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #64748b;
+}
+.breadcrumb span { cursor: pointer; transition: color 0.2s; }
+.breadcrumb span:hover { color: #60a5fa; }
+.breadcrumb .sep { cursor: default; }
+.breadcrumb .current { color: #cbd5e1; font-weight: 600; cursor: default; }
+
+/* ── Folder/Item Grid ── */
+.lib-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.lib-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(71,85,105,0.3);
+    border-radius: 14px;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+}
+.lib-card:hover {
+    background: rgba(59,130,246,0.08);
+    border-color: rgba(59,130,246,0.3);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+
+.lib-card-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+.lib-card-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+.lib-card-meta {
+    font-size: 11px;
+    color: #64748b;
+}
+.lib-card-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: none;
+    gap: 4px;
+}
+.lib-card:hover .lib-card-actions { display: flex; }
+.lib-card-action {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: none;
+    background: rgba(30,41,59,0.8);
+    color: #94a3b8;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+.lib-card-action:hover { color: #60a5fa; background: rgba(59,130,246,0.2); }
+.lib-card-action.danger:hover { color: #ef4444; background: rgba(239,68,68,0.15); }
+
+/* ── Empty state ── */
+.empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    color: #64748b;
+}
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state h3 { color: #94a3b8; margin-bottom: 8px; font-size: 18px; }
+.empty-state p { font-size: 13px; }
+
+/* ── Context Menu ── */
+.ctx-menu {
+    position: fixed;
+    z-index: 99999;
+    background: #1e293b;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 10px;
+    padding: 6px;
+    min-width: 180px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    display: none;
+}
+.ctx-menu.show { display: block; }
+.ctx-item {
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #cbd5e1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s;
+}
+.ctx-item:hover { background: rgba(59,130,246,0.15); }
+.ctx-item.danger { color: #ef4444; }
+.ctx-item.danger:hover { background: rgba(239,68,68,0.1); }
+.ctx-sep { height: 1px; background: rgba(71,85,105,0.3); margin: 4px 6px; }
+
+/* ── Rename Dialog ── */
+.rename-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.rename-modal {
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 14px;
+    padding: 28px;
+    width: 380px;
+    max-width: 90vw;
+}
+.rename-modal h3 { margin-bottom: 16px; font-size: 16px; }
+.rename-modal input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(71,85,105,0.4);
+    background: rgba(30,41,59,0.8);
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 16px;
+}
+.rename-modal input:focus { border-color: #3b82f6; }
+.rename-btns { display: flex; gap: 10px; justify-content: flex-end; }
+.rename-btns button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+}
+.rename-btns .cancel { background: rgba(71,85,105,0.3); color: #94a3b8; }
+.rename-btns .confirm { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
+
+/* ── Preview Panel ── */
+.preview-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(6px);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.preview-modal {
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 16px;
+    width: 95vw;
+    max-width: 1200px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+.preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(71,85,105,0.3);
+    position: sticky;
+    top: 0;
+    background: #0f172a;
+    z-index: 1;
+}
+.preview-header h3 { font-size: 16px; }
+.preview-close {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 20px;
+    cursor: pointer;
+}
+.preview-close:hover { color: #fff; }
+.preview-body {
+    padding: 24px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #cbd5e1;
+    position: relative;
+    overflow-x: auto;
+}
+.preview-body h1, .preview-body h2, .preview-body h3, .preview-body h4 {
+    color: #f1f5f9;
+    margin: 16px 0 8px;
+}
+.preview-body p { margin-bottom: 12px; }
+.preview-body ul { padding-left: 20px; margin-bottom: 12px; }
+.preview-body li { margin-bottom: 6px; }
+.preview-body img { max-width: 100%; border-radius: 8px; margin: 12px 0; }
+
+/* ── Replicate ALL notes-content styling for faithful preview ── */
+
+/* Saved notes wrapper */
+.preview-body .saved-notes-wrap {
+    position: relative;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 12px;
+    padding: 20px;
+    border-left: 4px solid rgba(59, 130, 246, 0.7);
+    max-width: 100%;
+    transform-origin: top left;
+}
+.preview-body .saved-notes-wrap h1 {
+    font-size: 18px; color: #60a5fa; font-weight: 700; margin: 20px 0 12px;
+}
+.preview-body .saved-notes-wrap h2 {
+    font-size: 16px; color: #60a5fa; margin-bottom: 12px;
+}
+.preview-body .saved-notes-wrap h3 {
+    font-size: 14px; color: #a5d6ff; font-weight: 600; margin: 15px 0 8px;
+}
+.preview-body .saved-notes-wrap h4 {
+    font-size: 13px; color: #a5d6ff; font-weight: 600; margin: 12px 0 6px;
+}
+.preview-body .saved-notes-wrap p {
+    font-size: 13px; line-height: 1.7; color: #cbd5e1; margin: 10px 0;
+}
+.preview-body .saved-notes-wrap strong { color: #fbbf24; font-weight: 700; }
+.preview-body .saved-notes-wrap em { color: #a5d6ff; font-style: italic; }
+.preview-body .saved-notes-wrap ul,
+.preview-body .saved-notes-wrap ol {
+    margin-left: 20px; font-size: 13px; line-height: 1.6; color: #cbd5e1;
+    margin-top: 10px; margin-bottom: 10px;
+}
+.preview-body .saved-notes-wrap li { margin-bottom: 8px; }
+.preview-body .saved-notes-wrap h2,
+.preview-body .saved-notes-wrap h3 { clear: both; }
+
+/* PDF images — float right exactly like in notes editor */
+.preview-body .note-image {
+    float: right;
+    width: 240px;
+    margin: 4px 0 12px 18px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(15, 23, 42, 0.3);
+    shape-outside: margin-box;
+}
+.preview-body .note-image img {
+    width: 100%;
+    height: auto;
+    max-height: 260px;
+    object-fit: contain;
+    display: block;
+    cursor: pointer;
+    margin: 0;
+    border-radius: 0;
+}
+
+/* Tooltip terms */
+.preview-body .tooltip-term {
+    border-bottom: 2px solid #60a5fa;
+    color: #60a5fa;
+    font-weight: 600;
+    padding-bottom: 2px;
+}
+.preview-body .tooltip-term.has-definition { border-bottom-style: dotted; }
+
+/* Resizable flowchart wraps */
+.preview-body .resizable-wrap {
+    display: inline-block;
+    position: relative;
+    max-width: 100%;
+    vertical-align: top;
+    border-radius: 6px;
+}
+.preview-body .resizable-wrap .mermaid,
+.preview-body .resizable-wrap svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Inserted flowchart label */
+.preview-body .fc-label {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+/* Free-move images */
+.preview-body .free-img-wrap {
+    position: absolute;
+    z-index: 30;
+    border: none;
+    border-radius: 8px;
+    user-select: none;
+}
+.preview-body .free-img-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    pointer-events: none;
+    margin: 0;
+}
+
+/* Draw overlay image */
+.preview-body .saved-draw-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 40;
+    margin: 0;
+    border-radius: 0;
+}
+
+/* Move to folder modal */
+.move-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+.move-folder {
+    padding: 12px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #cbd5e1;
+    transition: background 0.15s;
+}
+.move-folder:hover { background: rgba(59,130,246,0.15); }
+.move-folder.current { color: #64748b; cursor: default; }
+
+</style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+        <div class="nav-item" onclick="window.location.href='dashboard.html'">🏠 Home</div>
+        <div class="nav-item" onclick="window.location.href='pdf-to-notes.html'">📝 PDF to Notes</div>
+        <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+        <div class="nav-item" onclick="window.location.href='flowchart.html'">📊 Flowcharts</div>
+        <div class="nav-item" onclick="window.location.href='flashcards.html'">🃏 Flashcards</div>
+        <div class="nav-item" onclick="window.location.href='aviator.html'">🤖 Aviator</div>
+        <div class="nav-item active">📁 Library</div>
+    </div>
+
+    <div class="main">
+        <div class="page-header">
+            <div>
+                <h1>📁 Library</h1>
+                <p>Your saved notes, flowcharts, and study materials</p>
+            </div>
+            <div class="header-actions">
+                <button class="header-btn" onclick="createFolder()">📂 New Folder</button>
+            </div>
+        </div>
+
+        <div class="breadcrumb" id="breadcrumb">
+            <span onclick="navigateTo(null)">📁 Library</span>
+        </div>
+
+        <div class="lib-grid" id="libGrid"></div>
+    </div>
+
+    <!-- Context Menu -->
+    <div class="ctx-menu" id="ctxMenu">
+        <div class="ctx-item" id="ctxOpen" onclick="ctxAction('open')">📂 Open</div>
+        <div class="ctx-item" id="ctxRename" onclick="ctxAction('rename')">✏️ Rename</div>
+        <div class="ctx-item" id="ctxMove" onclick="ctxAction('move')">📦 Move to...</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item danger" id="ctxDelete" onclick="ctxAction('delete')">🗑️ Delete</div>
+    </div>
+
+<script>
+// ═══════════════════════════════════════
+// LIBRARY DATA
+// ═══════════════════════════════════════
+const LIB_KEY = 'liftoffLibrary';
+
+function getLibrary() {
+    let lib = JSON.parse(localStorage.getItem(LIB_KEY));
+    if (!lib) {
+        lib = {
+            folders: [
+                { id: 'notes', name: '📝 Notes', items: [] },
+                { id: 'flowcharts', name: '📊 Flowcharts', items: [] }
+            ]
+        };
+        saveLibrary(lib);
+    }
+    return lib;
+}
+
+function saveLibrary(lib) {
+    localStorage.setItem(LIB_KEY, JSON.stringify(lib));
+}
+
+function generateId() {
+    return 'lib_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+}
+
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+let currentFolderId = null;
+let ctxTarget = null; // { type: 'folder'|'item', id: string, folderId?: string }
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+function render() {
+    const lib = getLibrary();
+    const grid = document.getElementById('libGrid');
+    const bc = document.getElementById('breadcrumb');
+
+    if (!currentFolderId) {
+        // Root view — show folders
+        bc.innerHTML = '<span class="current">📁 Library</span>';
+
+        if (lib.folders.length === 0) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-state-icon">📂</div><h3>No folders yet</h3><p>Create a folder to organize your study materials</p></div>`;
+            return;
+        }
+
+        let html = '';
+        lib.folders.forEach(f => {
+            const count = f.items.length;
+            html += `
+                <div class="lib-card" onclick="navigateTo('${f.id}')" oncontextmenu="showCtx(event,'folder','${f.id}')">
+                    <div class="lib-card-actions">
+                        <button class="lib-card-action" onclick="event.stopPropagation();renameFolder('${f.id}')" title="Rename">✏️</button>
+                        <button class="lib-card-action danger" onclick="event.stopPropagation();deleteFolder('${f.id}')" title="Delete">🗑️</button>
+                    </div>
+                    <div class="lib-card-icon">📁</div>
+                    <div class="lib-card-name">${escHtml(f.name)}</div>
+                    <div class="lib-card-meta">${count} item${count !== 1 ? 's' : ''}</div>
+                </div>`;
+        });
+        grid.innerHTML = html;
+    } else {
+        // Inside a folder — show items
+        const folder = lib.folders.find(f => f.id === currentFolderId);
+        if (!folder) { currentFolderId = null; render(); return; }
+
+        bc.innerHTML = `<span onclick="navigateTo(null)">📁 Library</span><span class="sep">›</span><span class="current">${escHtml(folder.name)}</span>`;
+
+        if (folder.items.length === 0) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div class="empty-state-icon">${folder.id === 'notes' ? '📝' : folder.id === 'flowcharts' ? '📊' : '📄'}</div><h3>No items yet</h3><p>Generate notes or flowcharts and they'll appear here automatically</p></div>`;
+            return;
+        }
+
+        let html = '';
+        folder.items.forEach(item => {
+            const icon = item.type === 'note' ? '📝' : item.type === 'flowchart' ? '📊' : '📄';
+            const date = new Date(item.createdAt).toLocaleDateString();
+            html += `
+                <div class="lib-card" onclick="openItem('${currentFolderId}','${item.id}')" oncontextmenu="showCtx(event,'item','${item.id}','${currentFolderId}')">
+                    <div class="lib-card-actions">
+                        <button class="lib-card-action" onclick="event.stopPropagation();renameItem('${currentFolderId}','${item.id}')" title="Rename">✏️</button>
+                        <button class="lib-card-action" onclick="event.stopPropagation();moveItem('${currentFolderId}','${item.id}')" title="Move">📦</button>
+                        <button class="lib-card-action danger" onclick="event.stopPropagation();deleteItem('${currentFolderId}','${item.id}')" title="Delete">🗑️</button>
+                    </div>
+                    <div class="lib-card-icon">${icon}</div>
+                    <div class="lib-card-name">${escHtml(item.name)}</div>
+                    <div class="lib-card-meta">${item.pdfName ? item.pdfName + ' • ' : ''}${date}</div>
+                </div>`;
+        });
+        grid.innerHTML = html;
+    }
+}
+
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function navigateTo(folderId) {
+    currentFolderId = folderId;
+    render();
+}
+
+// ═══════════════════════════════════════
+// FOLDER OPERATIONS
+// ═══════════════════════════════════════
+function createFolder() {
+    showRenameDialog('New Folder', 'Create Folder', function (name) {
+        if (!name) return;
+        const lib = getLibrary();
+        lib.folders.push({ id: generateId(), name: name, items: [] });
+        saveLibrary(lib);
+        render();
+    });
+}
+
+function renameFolder(folderId) {
+    const lib = getLibrary();
+    const folder = lib.folders.find(f => f.id === folderId);
+    if (!folder) return;
+
+    showRenameDialog(folder.name, 'Rename', function (name) {
+        if (!name) return;
+        folder.name = name;
+        saveLibrary(lib);
+        render();
+    });
+}
+
+function deleteFolder(folderId) {
+    // Protect default folders
+    if (folderId === 'notes' || folderId === 'flowcharts') {
+        alert('Default folders cannot be deleted');
+        return;
+    }
+    if (!confirm('Delete this folder and all its contents?')) return;
+    const lib = getLibrary();
+    lib.folders = lib.folders.filter(f => f.id !== folderId);
+    saveLibrary(lib);
+    if (currentFolderId === folderId) currentFolderId = null;
+    render();
+}
+
+// ═══════════════════════════════════════
+// ITEM OPERATIONS
+// ═══════════════════════════════════════
+function renameItem(folderId, itemId) {
+    const lib = getLibrary();
+    const folder = lib.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    const item = folder.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    showRenameDialog(item.name, 'Rename', function (name) {
+        if (!name) return;
+        item.name = name;
+        saveLibrary(lib);
+        render();
+    });
+}
+
+function deleteItem(folderId, itemId) {
+    if (!confirm('Delete this item?')) return;
+    const lib = getLibrary();
+    const folder = lib.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    folder.items = folder.items.filter(i => i.id !== itemId);
+    saveLibrary(lib);
+    render();
+}
+
+function moveItem(fromFolderId, itemId) {
+    const lib = getLibrary();
+    const fromFolder = lib.folders.find(f => f.id === fromFolderId);
+    if (!fromFolder) return;
+    const item = fromFolder.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Build move dialog
+    let html = '<div class="rename-overlay" id="moveOverlay"><div class="rename-modal"><h3>📦 Move to folder</h3><div class="move-list">';
+    lib.folders.forEach(f => {
+        const isCurrent = f.id === fromFolderId;
+        html += `<div class="move-folder${isCurrent ? ' current' : ''}" ${isCurrent ? '' : `onclick="doMove('${fromFolderId}','${itemId}','${f.id}')"`}>${isCurrent ? '📁' : '📂'} ${escHtml(f.name)}${isCurrent ? ' (current)' : ''}</div>`;
+    });
+    html += '</div><div class="rename-btns" style="margin-top:16px;"><button class="cancel" onclick="document.getElementById(\'moveOverlay\').remove()">Cancel</button></div></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function doMove(fromFolderId, itemId, toFolderId) {
+    const lib = getLibrary();
+    const from = lib.folders.find(f => f.id === fromFolderId);
+    const to = lib.folders.find(f => f.id === toFolderId);
+    if (!from || !to) return;
+    const idx = from.items.findIndex(i => i.id === itemId);
+    if (idx === -1) return;
+    const item = from.items.splice(idx, 1)[0];
+    to.items.unshift(item);
+    saveLibrary(lib);
+    const overlay = document.getElementById('moveOverlay');
+    if (overlay) overlay.remove();
+    render();
+}
+
+function openItem(folderId, itemId) {
+    const lib = getLibrary();
+    const folder = lib.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    const item = folder.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    if (item.type === 'flowchart') {
+        openFlowchartPreview(item, folderId);
+    } else {
+        openNotesPreview(item, folderId);
+    }
+}
+
+function openNotesPreview(item, folderId) {
+    const tier = localStorage.getItem('liftoffTier') || 'free';
+    const editBtn = tier !== 'free' 
+        ? `<button onclick="document.getElementById('previewOverlay').remove();window.location.href='note-editor.html?id=${item.id}&folder=${folderId}'" style="padding:8px 16px;border-radius:8px;border:none;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-weight:600;font-size:13px;cursor:pointer;margin-right:12px;">✏️ Edit</button>`
+        : '';
+    let html = `<div class="preview-overlay" id="previewOverlay" onclick="if(event.target===this)this.remove()">
+        <div class="preview-modal">
+            <div class="preview-header">
+                <h3>${escHtml(item.name)}</h3>
+                <div style="display:flex;align-items:center;">
+                    ${editBtn}
+                    <button class="preview-close" onclick="document.getElementById('previewOverlay').remove()">✕</button>
+                </div>
+            </div>
+            <div class="preview-body" id="previewBody">${item.content}</div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    // Scale the saved-notes-wrap to fit the preview container
+    requestAnimationFrame(() => {
+        const wrap = document.querySelector('#previewBody .saved-notes-wrap');
+        if (wrap) {
+            const body = document.getElementById('previewBody');
+            const availW = body.clientWidth;
+            const origW = parseInt(wrap.dataset.origW) || wrap.offsetWidth;
+            if (origW > availW) {
+                const scale = availW / origW;
+                wrap.style.transform = 'scale(' + scale + ')';
+                wrap.style.transformOrigin = 'top left';
+                wrap.style.width = origW + 'px';
+                // Adjust container height to match scaled content
+                const origH = parseInt(wrap.dataset.origH) || wrap.scrollHeight;
+                body.style.minHeight = (origH * scale) + 'px';
+            }
+        }
+    });
+}
+
+function openFlowchartPreview(item, folderId) {
+    // Remove any existing preview
+    const existing = document.getElementById('previewOverlay');
+    if (existing) existing.remove();
+
+    let html = `<div class="preview-overlay" id="previewOverlay" onclick="if(event.target===this)this.remove()">
+        <div class="preview-modal" style="width:900px;">
+            <div class="preview-header">
+                <h3>${escHtml(item.name)}</h3>
+                <div style="display:flex;align-items:center;">
+                    <button onclick="downloadFlowchartFromPreview()" style="padding:8px 16px;border-radius:8px;border:none;background:rgba(59,130,246,0.2);color:#60a5fa;font-weight:600;font-size:13px;cursor:pointer;margin-right:8px;">⬇️ Download</button>
+                    <button class="preview-close" onclick="document.getElementById('previewOverlay').remove()">✕</button>
+                </div>
+            </div>
+            <div class="preview-body" style="text-align:center;">
+                <pre class="mermaid" id="fcPreviewMermaid"></pre>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+
+    // Set content via textContent (safe, no escaping issues)
+    const rawContent = item.content || '';
+    // Check if the saved content is valid mermaid code (not rendered SVG text)
+    const looksLikeMermaid = /^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|mindmap)\b/m.test(rawContent.trim());
+    
+    if (!looksLikeMermaid) {
+        document.getElementById('fcPreviewMermaid').innerHTML = '<div style="color:#f87171;padding:20px;">⚠️ This flowchart was saved with corrupt data. Please regenerate and re-save it from the Flowcharts page.</div>';
+        return;
+    }
+    
+    document.getElementById('fcPreviewMermaid').textContent = rawContent;
+
+    // Render mermaid
+    const renderMermaid = async () => {
+        const el = document.getElementById('fcPreviewMermaid');
+        if (el) {
+            el.removeAttribute('data-processed');
+            try {
+                await mermaid.run({ nodes: [el] });
+            } catch (err) {
+                el.innerHTML = '<div style="color:#f87171;padding:20px;">⚠️ Flowchart syntax error. Please regenerate and re-save from the Flowcharts page.<br><br><details style="text-align:left;"><summary style="cursor:pointer;color:#64748b;">Show raw code</summary><pre style="white-space:pre-wrap;color:#94a3b8;margin-top:8px;font-size:12px;">' + escHtml(rawContent) + '</pre></details></div>';
+            }
+        }
+    };
+
+    if (window.mermaid) {
+        renderMermaid();
+    } else {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js';
+        s.onload = () => { mermaid.initialize({ startOnLoad: false, theme: 'dark' }); renderMermaid(); };
+        document.head.appendChild(s);
+    }
+}
+
+function downloadFlowchartFromPreview() {
+    const svg = document.querySelector('#previewOverlay .mermaid svg');
+    if (!svg) return;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = function () {
+        canvas.width = img.width * 2;
+        canvas.height = img.height * 2;
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const a = document.createElement('a');
+        a.download = 'flowchart.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+}
+
+// ═══════════════════════════════════════
+// RENAME DIALOG
+// ═══════════════════════════════════════
+function showRenameDialog(currentName, buttonText, callback) {
+    let html = `<div class="rename-overlay" id="renameOverlay">
+        <div class="rename-modal">
+            <h3>✏️ ${buttonText}</h3>
+            <input type="text" id="renameInput" value="${escHtml(currentName)}" onkeydown="if(event.key==='Enter')document.getElementById('renameConfirm').click()">
+            <div class="rename-btns">
+                <button class="cancel" onclick="document.getElementById('renameOverlay').remove()">Cancel</button>
+                <button class="confirm" id="renameConfirm">
+                    ${buttonText}
+                </button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    const input = document.getElementById('renameInput');
+    input.focus();
+    input.select();
+    document.getElementById('renameConfirm').onclick = function () {
+        const val = input.value.trim();
+        document.getElementById('renameOverlay').remove();
+        callback(val);
+    };
+}
+
+// ═══════════════════════════════════════
+// CONTEXT MENU
+// ═══════════════════════════════════════
+function showCtx(e, type, id, folderId) {
+    e.preventDefault();
+    e.stopPropagation();
+    ctxTarget = { type, id, folderId };
+    const menu = document.getElementById('ctxMenu');
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
+    menu.classList.add('show');
+
+    // Show/hide relevant items
+    document.getElementById('ctxMove').style.display = type === 'item' ? 'flex' : 'none';
+}
+
+function ctxAction(action) {
+    const menu = document.getElementById('ctxMenu');
+    menu.classList.remove('show');
+    if (!ctxTarget) return;
+
+    if (ctxTarget.type === 'folder') {
+        if (action === 'open') navigateTo(ctxTarget.id);
+        if (action === 'rename') renameFolder(ctxTarget.id);
+        if (action === 'delete') deleteFolder(ctxTarget.id);
+    } else {
+        if (action === 'open') openItem(ctxTarget.folderId, ctxTarget.id);
+        if (action === 'rename') renameItem(ctxTarget.folderId, ctxTarget.id);
+        if (action === 'move') moveItem(ctxTarget.folderId, ctxTarget.id);
+        if (action === 'delete') deleteItem(ctxTarget.folderId, ctxTarget.id);
+    }
+    ctxTarget = null;
+}
+
+// Close context menu on click away
+document.addEventListener('click', () => {
+    document.getElementById('ctxMenu').classList.remove('show');
+});
+
+// ═══════════════════════════════════════
+// GLOBAL SAVE API (used by other pages)
+// ═══════════════════════════════════════
+// These are also exposed via library-save.js
+
+// ═══════════════════════════════════════
+// AUTH CHECK
+// ═══════════════════════════════════════
+const user = JSON.parse(localStorage.getItem('liftoffUser'));
+if (!user) {
+    window.location.href = 'login.html';
+}
+
+// Init
+render();
+</script>
+</body>
+</html>

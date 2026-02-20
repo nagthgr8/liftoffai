@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowcharts - LiftOff</title>
+    <script src="theme.js"></script>
+    <script src="settings.js"></script>
+    <script src="audio.js"></script>
+    <script src="subscription.js"></script>
+    <script src="library-save.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #f1f5f9;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 240px;
+            background: rgba(15, 23, 42, 0.8);
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid rgba(71, 85, 105, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .sidebar h2 {
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            line-height: 1.2;
+        }
+
+        .logo-emoji {
+            font-size: 36px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-item {
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-item:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: translateX(5px);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+            padding: 20px 30px;
+            border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0;
+        }
+
+        .header p {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 5px;
+        }
+
+        .content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            gap: 15px;
+            padding: 15px;
+        }
+
+        .flowchart-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 15px;
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            padding: 20px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .setup-stage {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .input-section {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-box {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+            border: 2px dashed rgba(59, 130, 246, 0.5);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .input-box:hover {
+            border-color: rgba(59, 130, 246, 0.8);
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+        }
+
+        .input-box h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .input-box p {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        #pdfInput {
+            display: none;
+        }
+
+        .or-divider {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .or-divider::before,
+        .or-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(71, 85, 105, 0.3);
+        }
+
+        .text-input-wrapper {
+            width: 100%;
+        }
+
+        #subjectInput {
+            width: 100%;
+            background: rgba(71, 85, 105, 0.2);
+            border: 1px solid rgba(71, 85, 105, 0.4);
+            border-radius: 8px;
+            padding: 12px 15px;
+            color: #f1f5f9;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        #subjectInput:focus {
+            outline: none;
+            border-color: rgba(59, 130, 246, 0.7);
+            background: rgba(71, 85, 105, 0.3);
+        }
+
+        #subjectInput::placeholder {
+            color: #64748b;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .generating-message {
+            display: none;
+            flex: 1;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 20px;
+            text-align: center;
+        }
+
+        .generating-message.show {
+            display: flex;
+        }
+
+        .generating-message h3 {
+            font-size: 24px;
+            margin: 0;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .generating-message p {
+            font-size: 14px;
+            color: #94a3b8;
+            margin: 0;
+        }
+
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(59, 130, 246, 0.2);
+            border-top: 4px solid #60a5fa;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .flowchart-display {
+            display: none;
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(71, 85, 105, 0.2);
+        }
+
+        .flowchart-display.show {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Pan & Zoom container */
+        .zoom-wrapper {
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+            cursor: grab;
+            border-radius: 8px;
+        }
+
+        .zoom-wrapper:active {
+            cursor: grabbing;
+        }
+
+        .zoom-content {
+            transform-origin: 0 0;
+            transition: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 100%;
+            min-height: 100%;
+        }
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .zoom-btn {
+            width: 34px;
+            height: 34px;
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 8px;
+            color: #cbd5e1;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            backdrop-filter: blur(8px);
+        }
+
+        .zoom-btn:hover {
+            background: rgba(59, 130, 246, 0.3);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        .zoom-level {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 8px;
+            color: #94a3b8;
+            font-size: 11px;
+            padding: 0 10px;
+            display: flex;
+            align-items: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .flowchart-actions {
+            display: none;
+            gap: 10px;
+            margin-top: 15px;
+            justify-content: center;
+        }
+
+        .flowchart-actions.show {
+            display: flex;
+        }
+
+        .btn-secondary {
+            padding: 10px 15px;
+            background: rgba(71, 85, 105, 0.3);
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 6px;
+            color: #cbd5e1;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(71, 85, 105, 0.5);
+        }
+
+        .chat-panel {
+            width: 280px;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 15px;
+            border: 1px solid rgba(71, 85, 105, 0.3);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+        }
+
+        .chat-header h3 {
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .messages-container::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .messages-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .messages-container::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.5);
+            border-radius: 2px;
+        }
+
+        .message {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.ai {
+            justify-content: flex-start;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-avatar {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+        }
+
+        .message.ai .message-avatar {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+        }
+
+        .message.user .message-avatar {
+            background: rgba(71, 85, 105, 0.5);
+        }
+
+        .message-bubble {
+            max-width: 85%;
+            padding: 6px 10px;
+            border-radius: 8px;
+            word-wrap: break-word;
+            line-height: 1.3;
+        }
+
+        .chat-input-wrapper {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            border-top: 1px solid rgba(71, 85, 105, 0.2);
+            padding-top: 10px;
+        }
+
+        #chatInput {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid rgba(71, 85, 105, 0.5);
+            border-radius: 6px;
+            background: rgba(71, 85, 105, 0.2);
+            color: #cbd5e1;
+            font-size: 12px;
+            font-family: inherit;
+        }
+
+        #chatInput:focus {
+            outline: none;
+            border-color: rgba(59, 130, 246, 0.7);
+            background: rgba(71, 85, 105, 0.3);
+        }
+
+        #chatInput::placeholder {
+            color: #64748b;
+        }
+
+        #sendBtn {
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        #sendBtn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(59, 130, 246, 0.3);
+        }
+
+        .message-bubble {
+            max-width: 85%;
+            padding: 6px 10px;
+            border-radius: 8px;
+            word-wrap: break-word;
+            line-height: 1.3;
+        }
+
+        .message.ai .message-bubble {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #cbd5e1;
+        }
+
+        .upload-tip {
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            margin-top: 10px;
+            padding: 6px 12px;
+            border-left: 2px solid rgba(59, 130, 246, 0.4);
+            background: rgba(59, 130, 246, 0.05);
+            border-radius: 0 6px 6px 0;
+        }
+
+        .upload-tip span {
+            color: #94a3b8;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+        <div class="nav-item" onclick="window.location.href='dashboard.html'">🏠 Home</div>
+        <div class="nav-item" onclick="window.location.href='pdf-to-notes.html'">📝 PDF to Notes</div>
+        <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+        <div class="nav-item active">📊 Flowcharts</div>
+        <div class="nav-item" onclick="window.location.href='flashcards.html'">🃏 Flashcards</div>
+        <div class="nav-item" onclick="window.location.href='aviator.html'">🤖 Aviator</div>
+        <div class="nav-item" onclick="window.location.href='library.html'">📁 Library</div>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <h1>📊 Flowcharts</h1>
+            <p>Generate professional concept flowcharts from text prompts or PDFs</p>
+        </div>
+
+        <div class="content">
+            <div class="flowchart-panel">
+                <div id="setupStage" class="setup-stage">
+                    <div class="input-section">
+                        <div class="input-box" onclick="document.getElementById('pdfInput').click()">
+                            <h3>📤 Upload PDF</h3>
+                            <p>Click to select a PDF file</p>
+                        </div>
+                        <input type="file" id="pdfInput" accept=".pdf">
+                        <div class="or-divider">or</div>
+                        <div class="text-input-wrapper">
+                            <textarea id="subjectInput" placeholder="Or describe a topic/concept for flowchart generation..."></textarea>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn btn-primary" onclick="generateFlowchart()">Generate Flowchart</button>
+                        </div>
+                        <p class="upload-tip"><span>💡 Tip:</span> Uploading a PDF produces more accurate and detailed flowcharts than a text prompt</p>
+                    </div>
+                </div>
+
+                <div id="generatingMessage" class="generating-message">
+                    <div class="loader"></div>
+                    <h3>Generating Flowchart</h3>
+                    <p id="generatingText">Please wait while we create your flowchart...</p>
+                </div>
+
+                <div id="flowchartDisplay" class="flowchart-display">
+                    <div class="zoom-wrapper" id="zoomWrapper">
+                        <div class="zoom-content" id="zoomContent">
+                            <div id="mermaidDiagram" class="mermaid"></div>
+                        </div>
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
+                            <span class="zoom-level" id="zoomLevel">100%</span>
+                            <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">-</button>
+                            <button class="zoom-btn" onclick="zoomReset()" title="Reset">&#8634;</button>
+                        </div>
+                    </div>
+                    <div id="flowchartActions" class="flowchart-actions">
+                        <button class="btn-secondary" onclick="regenerateFlowchart()">🔄 Regenerate</button>
+                        <button class="btn-secondary" onclick="downloadFlowchart()">⬇️ Download</button>
+                        <button class="btn-secondary" onclick="saveFlowchartToLibrary()">💾 Save</button>
+                        <button class="btn-secondary" onclick="resetFlowchart()">← New Flowchart</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <h3>💬 Aviator</h3>
+                </div>
+                <div id="messagesContainer" class="messages-container">
+                    <div class="message ai">
+                        <div class="message-avatar">🤖</div>
+                        <div class="message-bubble">Hi! Upload a PDF or describe a topic to generate a flowchart. Ask me any questions!</div>
+                    </div>
+                </div>
+                <div class="chat-input-wrapper">
+                    <input type="text" id="chatInput" placeholder="Ask Aviator..." />
+                    <button id="sendBtn" onclick="sendMessageToAviator()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'linear'
+            }
+        });
+
+        const user = JSON.parse(localStorage.getItem('liftoffUser'));
+        if (!user) {
+            window.location.href = 'login.html';
+        }
+
+        let selectedPdf = null;
+        let currentTopic = null;
+        let currentMermaidCode = null;
+
+        document.getElementById('pdfInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                selectedPdf = file.name;
+                document.querySelector('.input-box').style.opacity = '0.6';
+                document.querySelector('.input-box p').textContent = `✓ ${file.name}`;
+                
+                const formData = new FormData();
+                formData.append('pdf', file);
+                formData.append('pdf_name', file.name);
+                
+                fetch(`${API_BASE}/upload-pdf`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Only show error messages, don't show success messages
+                    } else {
+                        // addStatusMessage(`❌ Upload failed: ${data.error}`);
+                        selectedPdf = null;
+                    }
+                })
+                .catch(err => {
+                    // addStatusMessage(`❌ Error: ${err.message}`);
+                    selectedPdf = null;
+                });
+            }
+        });
+
+        async function generateFlowchart() {
+            const subject = document.getElementById('subjectInput').value.trim();
+            
+            if (!selectedPdf && !subject) {
+                addStatusMessage("❌ Please upload a PDF or enter a topic");
+                return;
+            }
+
+            document.getElementById('setupStage').style.display = 'none';
+            document.getElementById('generatingMessage').classList.add('show');
+            
+            if (subject) {
+                document.getElementById('generatingText').innerText = `Creating flowchart for: "${subject}"`;
+                currentTopic = subject;
+            } else {
+                document.getElementById('generatingText').innerText = `Creating flowchart from: "${selectedPdf}"`;
+                currentTopic = selectedPdf;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/generate-flowchart`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pdf_name: selectedPdf,
+                        subject: subject || null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('generatingMessage').classList.remove('show');
+                    document.getElementById('flowchartDisplay').classList.add('show');
+                    document.getElementById('flowchartActions').classList.add('show');
+                    
+                    const mermaidDiagram = document.getElementById('mermaidDiagram');
+                    mermaidDiagram.textContent = data.mermaid_code;
+                    mermaidDiagram.removeAttribute('data-processed');
+                    currentMermaidCode = data.mermaid_code;
+                    
+                    await mermaid.run();
+                    zoomReset();
+                    if (window.playSound) window.playSound('generate');
+                    // Only show error messages, not success messages
+                } else {
+                    // addStatusMessage(`❌ Error: ${data.error}`);
+                    resetFlowchart();
+                }
+            } catch (error) {
+                addStatusMessage(`❌ Error: ${error.message}`);
+                resetFlowchart();
+            }
+        }
+
+        async function regenerateFlowchart() {
+            if (!currentTopic) return;
+            
+            document.getElementById('flowchartDisplay').classList.remove('show');
+            document.getElementById('generatingMessage').classList.add('show');
+            document.getElementById('generatingText').innerText = `Regenerating flowchart...`;
+
+            try {
+                const response = await fetch(`${API_BASE}/generate-flowchart`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        pdf_name: selectedPdf,
+                        subject: currentTopic && !selectedPdf ? currentTopic : null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('generatingMessage').classList.remove('show');
+                    document.getElementById('flowchartDisplay').classList.add('show');
+                    
+                    const mermaidDiagram = document.getElementById('mermaidDiagram');
+                    mermaidDiagram.textContent = data.mermaid_code;
+                    mermaidDiagram.removeAttribute('data-processed');
+                    currentMermaidCode = data.mermaid_code;
+                    
+                    await mermaid.run();
+                    zoomReset();
+                    if (window.playSound) window.playSound('generate');
+                    // Only show error messages, not success messages
+                } else {
+                    // addStatusMessage(`❌ Error: ${data.error}`);
+                    document.getElementById('generatingMessage').classList.remove('show');
+                    document.getElementById('flowchartDisplay').classList.add('show');
+                }
+            } catch (error) {
+                addStatusMessage(`❌ Error: ${error.message}`);
+                document.getElementById('generatingMessage').classList.remove('show');
+                document.getElementById('flowchartDisplay').classList.add('show');
+            }
+        }
+
+        function resetFlowchart() {
+            selectedPdf = null;
+            currentTopic = null;
+            document.getElementById('setupStage').style.display = 'flex';
+            document.getElementById('generatingMessage').classList.remove('show');
+            document.getElementById('flowchartDisplay').classList.remove('show');
+            document.getElementById('flowchartActions').classList.remove('show');
+            document.querySelector('.input-box').style.opacity = '1';
+            document.querySelector('.input-box p').textContent = 'Click to select a PDF file';
+            document.getElementById('subjectInput').value = '';
+            document.getElementById('pdfInput').value = '';
+        }
+
+        // Download flowchart as PNG
+        function downloadFlowchart() {
+            const svg = document.querySelector('#mermaidDiagram svg');
+            if (!svg) return;
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = function () {
+                canvas.width = img.width * 2;
+                canvas.height = img.height * 2;
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                const a = document.createElement('a');
+                a.download = (currentTopic || selectedPdf || 'flowchart').replace('.pdf', '') + '_flowchart.png';
+                a.href = canvas.toDataURL('image/png');
+                a.click();
+            };
+            img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+        }
+
+        // Save flowchart to library
+        function saveFlowchartToLibrary() {
+            if (!currentMermaidCode) return;
+            const defaultName = (currentTopic || (selectedPdf ? selectedPdf.replace('.pdf', '') : 'Flowchart'));
+            if (window.libraryShowSaveModal) {
+                window.libraryShowSaveModal('flowchart', currentMermaidCode, selectedPdf, defaultName + ' Flowchart', function(item) {
+                    addStatusMessage("💾 Saved to Library as \"" + item.name + "\"");
+                });
+            }
+        }
+
+        function addStatusMessage(text) {
+            const container = document.getElementById('messagesContainer');
+            const message = document.createElement('div');
+            message.className = 'message ai';
+            message.innerHTML = `
+                <div class="message-avatar">🤖</div>
+                <div class="message-bubble">${text}</div>
+            `;
+            container.appendChild(message);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Track chat history for Aviator context
+        let aviatorChatHistory = [];
+
+        async function sendMessageToAviator() {
+            // Check if Aviator access is allowed for free tier in non-Aviator pages
+            if (window.isFeatureAllowed && !window.isFeatureAllowed('aviator_everywhere')) {
+                if (window.showUpgradeRequired) {
+                    window.showUpgradeRequired('aviator_everywhere');
+                }
+                return;
+            }
+
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message to UI
+            const container = document.getElementById('messagesContainer');
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.innerHTML = `
+                <div class="message-avatar">👤</div>
+                <div class="message-bubble">${message}</div>
+            `;
+            container.appendChild(userMsg);
+            
+            // Add user message to chat history
+            aviatorChatHistory.push({
+                "role": "user",
+                "content": message
+            });
+            
+            input.value = '';
+            container.scrollTop = container.scrollHeight;
+            
+            // Send to Aviator API with full chat history
+            try {
+                const response = await fetch(`${API_BASE}/aviator-chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        context: currentTopic || selectedPdf || 'flowchart',
+                        history: aviatorChatHistory.slice(0, -1)  // Send history except the current message we just added
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const assistantResponse = data.response || data.answer;
+                    
+                    // Add assistant message to UI
+                    const assistantMsg = document.createElement('div');
+                    assistantMsg.className = 'message assistant';
+                    assistantMsg.innerHTML = `
+                        <div class="message-avatar">🤖</div>
+                        <div class="message-bubble">${assistantResponse}</div>
+                    `;
+                    container.appendChild(assistantMsg);
+                    
+                    // Add assistant response to chat history
+                    aviatorChatHistory.push({
+                        "role": "assistant",
+                        "content": assistantResponse
+                    });
+                    
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    addStatusMessage('❌ Unable to get response from Aviator');
+                }
+            } catch (error) {
+                addStatusMessage(`❌ Error: ${error.message}`);
+            }
+        }
+        
+        // ── Zoom & Pan ──
+        let zScale = 1;
+        let panX = 0, panY = 0;
+        let isPanning = false;
+        let startX, startY;
+        const MIN_ZOOM = 0.3;
+        const MAX_ZOOM = 5;
+        const ZOOM_STEP = 0.15;
+
+        const zoomWrapper = document.getElementById('zoomWrapper');
+        const zoomContent = document.getElementById('zoomContent');
+        const zoomLevelLabel = document.getElementById('zoomLevel');
+
+        function applyTransform() {
+            zoomContent.style.transform = `translate(${panX}px, ${panY}px) scale(${zScale})`;
+            zoomLevelLabel.textContent = Math.round(zScale * 100) + '%';
+        }
+
+        function zoomIn()  { zScale = Math.min(MAX_ZOOM, zScale + ZOOM_STEP); applyTransform(); }
+        function zoomOut() { zScale = Math.max(MIN_ZOOM, zScale - ZOOM_STEP); applyTransform(); }
+        function zoomReset() { zScale = 1; panX = 0; panY = 0; applyTransform(); }
+
+        // Mouse-wheel zoom (centered on cursor)
+        zoomWrapper.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            const rect = zoomWrapper.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+
+            const oldScale = zScale;
+            if (e.deltaY < 0) {
+                zScale = Math.min(MAX_ZOOM, zScale + ZOOM_STEP);
+            } else {
+                zScale = Math.max(MIN_ZOOM, zScale - ZOOM_STEP);
+            }
+            const ratio = zScale / oldScale;
+            panX = mx - ratio * (mx - panX);
+            panY = my - ratio * (my - panY);
+            applyTransform();
+        }, { passive: false });
+
+        // Click-drag pan
+        zoomWrapper.addEventListener('mousedown', function(e) {
+            if (e.button !== 0) return;
+            isPanning = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+            zoomWrapper.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', function(e) {
+            if (!isPanning) return;
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            applyTransform();
+        });
+
+        window.addEventListener('mouseup', function() {
+            if (!isPanning) return;
+            isPanning = false;
+            zoomWrapper.style.cursor = 'grab';
+        });
+
+        // Touch support for mobile
+        let lastTouchDist = 0;
+        let lastTouchX = 0, lastTouchY = 0;
+
+        zoomWrapper.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+                isPanning = true;
+                startX = e.touches[0].clientX - panX;
+                startY = e.touches[0].clientY - panY;
+            } else if (e.touches.length === 2) {
+                isPanning = false;
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                lastTouchDist = Math.hypot(dx, dy);
+                lastTouchX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            }
+        }, { passive: false });
+
+        zoomWrapper.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+            if (e.touches.length === 1 && isPanning) {
+                panX = e.touches[0].clientX - startX;
+                panY = e.touches[0].clientY - startY;
+                applyTransform();
+            } else if (e.touches.length === 2) {
+                const dx = e.touches[0].clientX - e.touches[1].clientX;
+                const dy = e.touches[0].clientY - e.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                const rect = zoomWrapper.getBoundingClientRect();
+                const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+                const oldScale = zScale;
+                zScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zScale * (dist / lastTouchDist)));
+                const ratio = zScale / oldScale;
+                panX = mx - ratio * (mx - panX);
+                panY = my - ratio * (my - panY);
+                lastTouchDist = dist;
+                applyTransform();
+            }
+        }, { passive: false });
+
+        zoomWrapper.addEventListener('touchend', function() {
+            isPanning = false;
+            lastTouchDist = 0;
+        });
+
+        // Allow Enter key to send message
+        document.addEventListener('DOMContentLoaded', function() {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendMessageToAviator();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+

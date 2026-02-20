@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LiftOff Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="theme.js"></script>
+<script src="settings.js"></script>
+<script src="audio.js"></script>
+<script src="subscription.js"></script>
+<script src="library-save.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.x.x/firebase-analytics.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyC5HGYGXLVtZNvR2FpMsnnTuu26IR--UnY",
+    authDomain: "liftoff-29bff.firebaseapp.com",
+    projectId: "liftoff-29bff",
+    appId: "1:1037043817004:web:772436bdb6582a3e3d0f89",
+    measurementId: "G-BX4CQ6ZQXF"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+
+<style>
+
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #111827;
+    color: #f3f4f6;
+    display: flex;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background: rgba(15, 23, 42, 0.8);
+    height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+    border-right: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+    overflow-y: auto;
+}
+
+.sidebar h2 {
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+}
+
+.logo-emoji {
+    font-size: 36px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nav-item {
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.nav-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: translateX(5px);
+}
+
+.nav-item.active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+/* Main content */
+.main {
+    flex: 1;
+    padding: 40px;
+    overflow-y: auto;
+    max-height: 100vh;
+}
+
+.card {
+    background: rgba(255,255,255,0.05);
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.card h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 18px;
+}
+
+/* Test History */
+.test-card {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s;
+}
+
+.test-card:hover {
+    background: rgba(59, 130, 246, 0.15);
+    transform: translateX(5px);
+}
+
+.test-info {
+    flex: 1;
+}
+
+.test-pdf-name {
+    font-weight: 600;
+    color: #60a5fa;
+    margin-bottom: 4px;
+}
+
+.test-meta {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.test-score {
+    text-align: right;
+    min-width: 120px;
+}
+
+.score-percentage {
+    font-size: 18px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+}
+
+.score-details {
+    font-size: 12px;
+    color: #9ca3af;
+}
+.profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 40px;
+}
+
+#fullName {
+    margin: 0;
+    font-size: 26px;
+}
+
+#usernameTag {
+    margin: 5px 0 0;
+    color: #9ca3af;
+}
+
+/* ── Topic Setup Modal ── */
+.topic-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.topic-modal {
+    background: #0f172a;
+    border-radius: 20px;
+    border: 1px solid rgba(71,85,105,0.4);
+    width: 560px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 40px 36px;
+    animation: topicSlide 0.35s ease;
+}
+@keyframes topicSlide {
+    from { opacity:0; transform:translateY(30px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+.topic-modal h2 {
+    text-align: center;
+    font-size: 26px;
+    margin-bottom: 6px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.topic-modal .topic-sub {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 14px;
+    margin-bottom: 24px;
+}
+.topic-input-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.topic-input-row input {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(71,85,105,0.4);
+    background: rgba(30,41,59,0.8);
+    color: #f1f5f9;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.topic-input-row input:focus {
+    border-color: #3b82f6;
+}
+.topic-input-row button {
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    white-space: nowrap;
+}
+.topic-input-row button:hover { transform: translateY(-1px); }
+.topic-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+    min-height: 36px;
+}
+.topic-tag {
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: rgba(59,130,246,0.15);
+    border: 1px solid rgba(59,130,246,0.3);
+    color: #60a5fa;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.topic-tag .remove-topic {
+    cursor: pointer;
+    color: #94a3b8;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+.topic-tag .remove-topic:hover { color: #ef4444; }
+.topic-count {
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+.topic-done-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.topic-done-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(16,185,129,0.3); }
+.topic-done-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+.topic-manage-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(71,85,105,0.3);
+    background: rgba(30,41,59,0.5);
+    color: #94a3b8;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-left: 10px;
+}
+.topic-manage-btn:hover { color: #60a5fa; border-color: #3b82f6; }
+
+/* ── Pie Chart ── */
+.chart-container {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+}
+.chart-canvas-wrap {
+    width: 260px;
+    height: 260px;
+    flex-shrink: 0;
+}
+.chart-legend {
+    flex: 1;
+}
+.chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #cbd5e1;
+}
+.chart-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.chart-legend-score {
+    margin-left: auto;
+    font-weight: 700;
+    font-size: 14px;
+}
+.chart-empty {
+    text-align: center;
+    color: #64748b;
+    padding: 40px;
+    font-size: 14px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+    <div class="nav-item active">🏠 Home</div>
+    <div class="nav-item" onclick="window.location.href='pdf-to-notes.html'">📝 PDF to Notes</div>
+    <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+    <div class="nav-item" onclick="window.location.href='flowchart.html'">📊 Flowcharts</div>
+    <div class="nav-item" onclick="window.location.href='flashcards.html'">🃏 Flashcards</div>
+    <div class="nav-item" onclick="window.location.href='aviator.html'">🤖 Aviator</div>
+    <div class="nav-item" onclick="window.location.href='library.html'">📁 Library</div></div>
+
+<div class="main">
+<div class="profile-header">
+    <div>
+        <h1 id="fullName">Full Name</h1>
+        <p id="usernameTag">@username</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Welcome back.</h2>
+    <p>This is your dashboard.</p>
+</div>
+
+<div class="card" id="topicPerformanceCard">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+        <h2 style="margin:0">📊 Topic Performance</h2>
+        <button class="topic-manage-btn" onclick="openTopicSetup()">✏️ Manage Topics</button>
+    </div>
+    <div id="pieChartContainer">
+        <div class="chart-empty">Take some tests to see your performance breakdown!</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📋 Test History</h2>
+    <div id="testHistoryContainer">
+        <p style="color: #9ca3af;">No tests taken yet. Start your first test!</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>📈 Learning Progress</h2>
+    <div id="statsContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+        <div style="background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 8px; border-left: 3px solid #10b981;">
+            <div style="color: #9ca3af; font-size: 12px;">Tests Completed</div>
+            <div style="font-size: 24px; font-weight: 700; color: #10b981;" id="totalTests">0</div>
+        </div>
+        <div style="background: rgba(96, 165, 250, 0.1); padding: 15px; border-radius: 8px; border-left: 3px solid #60a5fa;">
+            <div style="color: #9ca3af; font-size: 12px;">Average Score</div>
+            <div style="font-size: 24px; font-weight: 700; color: #60a5fa;" id="avgScore">0%</div>
+        </div>
+        <div style="background: rgba(168, 85, 247, 0.1); padding: 15px; border-radius: 8px; border-left: 3px solid #a855f7;">
+            <div style="color: #9ca3af; font-size: 12px;">Best Score</div>
+            <div style="font-size: 24px; font-weight: 700; color: #a855f7;" id="bestScore">0%</div>
+        </div>
+        <div style="background: rgba(239, 68, 68, 0.1); padding: 15px; border-radius: 8px; border-left: 3px solid #ef4444;">
+            <div style="color: #9ca3af; font-size: 12px;">Questions Answered</div>
+            <div style="font-size: 24px; font-weight: 700; color: #ef4444;" id="totalQuestions">0</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── Check subscription tier and hide Ultra-only features ──
+function initSubscriptionFeatures() {
+    var tier = localStorage.getItem('liftoffTier') || 'free';
+    
+    // Hide Topic Performance chart for non-Ultra tiers
+    if (tier !== 'ultra') {
+        var card = document.getElementById('topicPerformanceCard');
+        if (card) card.style.display = 'none';
+    }
+}
+
+// Run on page load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSubscriptionFeatures);
+} else {
+    initSubscriptionFeatures();
+}
+
+const user = JSON.parse(localStorage.getItem("liftoffUser"));
+
+if (!user) {
+    window.location.href = "login.html";
+} else {
+    document.getElementById("fullName").innerText = user.fullname || "User";
+    document.getElementById("usernameTag").innerText = "@" + user.username;
+}
+
+/* ════════════════════════════════════════
+   TOPIC SETUP
+   ════════════════════════════════════════ */
+const TOPICS_KEY = 'liftoffTopics';
+
+function getTopics() {
+    return JSON.parse(localStorage.getItem(TOPICS_KEY)) || [];
+}
+function saveTopics(arr) {
+    localStorage.setItem(TOPICS_KEY, JSON.stringify(arr));
+}
+
+// Build the topic setup modal HTML
+function buildTopicModal(isFirstTime) {
+    const topics = getTopics();
+    let tagsHtml = '';
+    topics.forEach((t, i) => {
+        tagsHtml += `<span class="topic-tag">${t}<span class="remove-topic" onclick="removeTopic(${i})">✕</span></span>`;
+    });
+
+    return `
+    <div class="topic-overlay" id="topicOverlay">
+        <div class="topic-modal">
+            <h2>${isFirstTime ? '📚 Set Up Your Topics' : '✏️ Manage Topics'}</h2>
+            <p class="topic-sub">${isFirstTime ? 'Add the subjects or chapters you study (at least 1)' : 'Add or remove your study topics'}</p>
+            <div class="topic-input-row">
+                <input type="text" id="topicInput" placeholder="e.g. English, History, Biology..." onkeydown="if(event.key==='Enter')addTopic()">
+                <button onclick="addTopic()">+ Add</button>
+            </div>
+            <div class="topic-tags" id="topicTags">${tagsHtml}</div>
+            <div class="topic-count" id="topicCount">${topics.length} topic${topics.length !== 1 ? 's' : ''} added</div>
+            <button class="topic-done-btn" id="topicDoneBtn" onclick="finishTopicSetup()" ${topics.length < 1 ? 'disabled' : ''}>
+                ${isFirstTime ? "Let's Go! 🚀" : 'Done ✓'}
+            </button>
+        </div>
+    </div>`;
+}
+
+function openTopicSetup() {
+    let wrap = document.getElementById('topicModalWrap');
+    if (wrap) wrap.remove();
+    wrap = document.createElement('div');
+    wrap.id = 'topicModalWrap';
+    wrap.innerHTML = buildTopicModal(false);
+    document.body.appendChild(wrap);
+    document.getElementById('topicInput').focus();
+}
+
+function showFirstTimeTopicSetup() {
+    let wrap = document.getElementById('topicModalWrap');
+    if (wrap) wrap.remove();
+    wrap = document.createElement('div');
+    wrap.id = 'topicModalWrap';
+    wrap.innerHTML = buildTopicModal(true);
+    document.body.appendChild(wrap);
+    document.getElementById('topicInput').focus();
+}
+
+function addTopic() {
+    const input = document.getElementById('topicInput');
+    const val = input.value.trim();
+    if (!val) return;
+    const topics = getTopics();
+    // Avoid duplicates (case-insensitive)
+    if (topics.some(t => t.toLowerCase() === val.toLowerCase())) {
+        input.value = '';
+        return;
+    }
+    if (topics.length >= 30) {
+        alert('Maximum 30 topics allowed');
+        return;
+    }
+    topics.push(val);
+    saveTopics(topics);
+    refreshTopicUI();
+    input.value = '';
+    input.focus();
+}
+
+function removeTopic(index) {
+    const topics = getTopics();
+    topics.splice(index, 1);
+    saveTopics(topics);
+    refreshTopicUI();
+}
+
+function refreshTopicUI() {
+    const topics = getTopics();
+    const container = document.getElementById('topicTags');
+    const count = document.getElementById('topicCount');
+    const btn = document.getElementById('topicDoneBtn');
+    if (!container) return;
+
+    let html = '';
+    topics.forEach((t, i) => {
+        html += `<span class="topic-tag">${t}<span class="remove-topic" onclick="removeTopic(${i})">✕</span></span>`;
+    });
+    container.innerHTML = html;
+    count.textContent = topics.length + ' topic' + (topics.length !== 1 ? 's' : '') + ' added';
+    btn.disabled = topics.length < 1;
+}
+
+function finishTopicSetup() {
+    const wrap = document.getElementById('topicModalWrap');
+    if (wrap) wrap.remove();
+    // Refresh pie chart in case topics changed
+    loadTestHistory();
+}
+
+// Show topic setup on first visit (no topics saved)
+if (getTopics().length === 0) {
+    showFirstTimeTopicSetup();
+}
+
+/* ════════════════════════════════════════
+   PIE CHART (Chart.js)
+   ════════════════════════════════════════ */
+const PIE_COLORS = [
+    '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444',
+    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+    '#14b8a6', '#e11d48', '#a855f7', '#22d3ee', '#fb923c',
+    '#4ade80', '#f472b6', '#38bdf8', '#facc15', '#c084fc',
+    '#2dd4bf', '#f87171', '#818cf8', '#a3e635', '#fb7185',
+    '#34d399', '#fbbf24', '#60a5fa', '#c084fc', '#f43f5e'
+];
+
+let pieChart = null;
+
+function buildPieChart(testHistory) {
+    const container = document.getElementById('pieChartContainer');
+    if (!testHistory || testHistory.length === 0) {
+        container.innerHTML = '<div class="chart-empty">Take some tests to see your performance breakdown!</div>';
+        return;
+    }
+
+    // Group by topic
+    const topicData = {};
+    testHistory.forEach(t => {
+        const topic = t.topic || 'Uncategorized';
+        if (!topicData[topic]) {
+            topicData[topic] = { scores: [], pdfs: new Set() };
+        }
+        topicData[topic].scores.push(t.percentage);
+        topicData[topic].pdfs.add(t.pdfName || 'Unknown PDF');
+    });
+
+    const labels = Object.keys(topicData);
+    const averages = labels.map(l => {
+        const scores = topicData[l].scores;
+        return parseFloat((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1));
+    });
+    const pdfLists = labels.map(l => Array.from(topicData[l].pdfs));
+    const testCounts = labels.map(l => topicData[l].scores.length);
+    const colors = labels.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]);
+
+    // Build HTML
+    container.innerHTML = `
+        <div class="chart-container">
+            <div class="chart-canvas-wrap">
+                <canvas id="topicPieChart"></canvas>
+            </div>
+            <div class="chart-legend" id="chartLegend"></div>
+        </div>`;
+
+    // Build legend
+    const legendEl = document.getElementById('chartLegend');
+    let legendHtml = '';
+    labels.forEach((label, i) => {
+        const scoreColor = averages[i] >= 80 ? '#10b981' : averages[i] >= 60 ? '#f59e0b' : '#ef4444';
+        legendHtml += `
+            <div class="chart-legend-item" title="PDFs: ${pdfLists[i].join(', ')}">
+                <span class="chart-legend-dot" style="background:${colors[i]}"></span>
+                <span>${label}</span>
+                <span style="color:#64748b;font-size:11px;">(${testCounts[i]} test${testCounts[i] > 1 ? 's' : ''})</span>
+                <span class="chart-legend-score" style="color:${scoreColor}">${averages[i]}%</span>
+            </div>`;
+    });
+    legendEl.innerHTML = legendHtml;
+
+    // Create chart
+    const ctx = document.getElementById('topicPieChart').getContext('2d');
+    if (pieChart) pieChart.destroy();
+
+    pieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: testCounts,
+                backgroundColor: colors,
+                borderColor: '#0f172a',
+                borderWidth: 3,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '55%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15,23,42,0.95)',
+                    titleColor: '#f1f5f9',
+                    bodyColor: '#cbd5e1',
+                    borderColor: 'rgba(59,130,246,0.3)',
+                    borderWidth: 1,
+                    padding: 14,
+                    cornerRadius: 10,
+                    titleFont: { size: 14, weight: 'bold' },
+                    bodyFont: { size: 12 },
+                    callbacks: {
+                        title: function(items) {
+                            return items[0].label;
+                        },
+                        label: function(item) {
+                            const idx = item.dataIndex;
+                            return `Avg Score: ${averages[idx]}%`;
+                        },
+                        afterLabel: function(item) {
+                            const idx = item.dataIndex;
+                            const pdfs = pdfLists[idx];
+                            let lines = [`Tests: ${testCounts[idx]}`, '─── PDFs ───'];
+                            pdfs.forEach(p => lines.push('• ' + p));
+                            return lines;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/* ════════════════════════════════════════
+   TEST HISTORY + STATS
+   ════════════════════════════════════════ */
+function loadTestHistory() {
+    const user = JSON.parse(localStorage.getItem('liftoffUser'));
+    
+    if (!user || !user.username) {
+        const container = document.getElementById('testHistoryContainer');
+        container.innerHTML = '<p style="color: #9ca3af;">No tests taken yet. Start your first test!</p>';
+        updateStats([]);
+        buildPieChart([]);
+        return;
+    }
+    
+    const API_BASE = 'http://localhost:5000/api';
+    fetch(`${API_BASE}/get-test-history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user.username })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const testHistory = data.history || [];
+        renderTestHistory(testHistory);
+    })
+    .catch(err => {
+        console.log("Failed to load from backend, using localStorage", err);
+        const testHistory = JSON.parse(localStorage.getItem('liftoffTestHistory')) || [];
+        renderTestHistory(testHistory);
+    });
+}
+
+function renderTestHistory(testHistory) {
+    const container = document.getElementById('testHistoryContainer');
+    
+    if (testHistory.length === 0) {
+        container.innerHTML = '<p style="color: #9ca3af;">No tests taken yet. Start your first test!</p>';
+        updateStats([]);
+        buildPieChart([]);
+        return;
+    }
+    
+    let html = '';
+    testHistory.forEach(test => {
+        const date = new Date(test.timestamp);
+        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const difficultyEmoji = test.difficulty === 'easy' ? '🟢' : test.difficulty === 'normal' ? '🟡' : '🔴';
+        let scoreColor = test.percentage >= 80 ? '#10b981' : test.percentage >= 60 ? '#f59e0b' : '#ef4444';
+        const topicLabel = test.topic ? `<span style="color:#a78bfa;font-size:11px;margin-left:8px;">${test.topic}</span>` : '';
+
+        html += `
+            <div class="test-card">
+                <div class="test-info">
+                    <div class="test-pdf-name">${test.pdfName || 'Unknown PDF'}${topicLabel}</div>
+                    <div class="test-meta">${difficultyEmoji} ${test.difficulty} • ${dateStr}</div>
+                </div>
+                <div class="test-score">
+                    <div class="score-percentage" style="color: ${scoreColor};">${test.percentage}%</div>
+                    <div class="score-details">${test.score}/${test.totalQuestions}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    updateStats(testHistory);
+    buildPieChart(testHistory);
+}
+
+function updateStats(testHistory) {
+    if (testHistory.length === 0) {
+        document.getElementById('totalTests').innerText = '0';
+        document.getElementById('avgScore').innerText = '0%';
+        document.getElementById('bestScore').innerText = '0%';
+        document.getElementById('totalQuestions').innerText = '0';
+        return;
+    }
+    
+    const totalTests = testHistory.length;
+    const avgPercentage = (testHistory.reduce((sum, t) => sum + t.percentage, 0) / testHistory.length).toFixed(1);
+    const bestPercentage = Math.max(...testHistory.map(t => t.percentage));
+    const totalQuestionsAnswered = testHistory.reduce((sum, t) => sum + t.totalQuestions, 0);
+    
+    document.getElementById('totalTests').innerText = totalTests;
+    document.getElementById('avgScore').innerText = avgPercentage + '%';
+    document.getElementById('bestScore').innerText = bestPercentage + '%';
+    document.getElementById('totalQuestions').innerText = totalQuestionsAnswered;
+}
+
+loadTestHistory();
+
+</script>
+</html>

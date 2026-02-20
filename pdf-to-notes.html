@@ -1,0 +1,2309 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LiftOff - PDF to Notes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="theme.js"></script>
+<script src="settings.js"></script>
+<script src="audio.js"></script>
+<script src="subscription.js"></script>
+<script src="library-save.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>if(typeof mermaid!=='undefined')mermaid.initialize({startOnLoad:false,theme:'dark'});</script>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #f1f5f9;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.sidebar h2 {
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+}
+
+.logo-emoji {
+    font-size: 36px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nav-item {
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.nav-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: translateX(5px);
+}
+
+.nav-item.active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+/* Main Container */
+.main-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+    padding: 20px 30px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header p {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 5px;
+}
+
+/* Content Area - Two Columns */
+.content-wrapper {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    gap: 15px;
+    padding: 15px;
+}
+
+/* Left Column - PDF Upload & Notes */
+.notes-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 15px;
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    padding: 20px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.upload-area {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.upload-box {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+    border: 2px dashed rgba(59, 130, 246, 0.5);
+    border-radius: 12px;
+    padding: 25px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.upload-box:hover {
+    border-color: rgba(59, 130, 246, 0.8);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+}
+
+.upload-box h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.upload-box p {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+#pdfInput {
+    display: none;
+}
+
+.understanding-selector {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.understanding-selector label {
+    font-size: 12px;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+    display: block;
+    width: 100%;
+}
+
+.level-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 12px;
+    background: rgba(71, 85, 105, 0.3);
+    border: 1px solid rgba(71, 85, 105, 0.5);
+    border-radius: 8px;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.level-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.level-btn.selected {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-color: #3b82f6;
+    color: white;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    flex: 1;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 13px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+}
+
+.btn-secondary {
+    background: rgba(71, 85, 105, 0.3);
+    border: 1px solid rgba(71, 85, 105, 0.5);
+    color: #cbd5e1;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: rgba(71, 85, 105, 0.5);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Notes Display */
+.notes-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.notes-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.notes-container::-webkit-scrollbar-track {
+    background: rgba(71, 85, 105, 0.1);
+    border-radius: 3px;
+}
+
+.notes-container::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 3px;
+}
+
+.notes-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+}
+
+.notes-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.notes-empty p {
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+.notes-content {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-left: 4px solid rgba(59, 130, 246, 0.7);
+    animation: slideIn 0.4s ease;
+    position: relative;
+    min-height: 200px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.notes-content h2 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #60a5fa;
+}
+
+.notes-content h1 {
+    font-size: 18px;
+    margin-top: 20px;
+    margin-bottom: 12px;
+    color: #60a5fa;
+    font-weight: 700;
+}
+
+.notes-content h3 {
+    font-size: 14px;
+    margin-top: 15px;
+    margin-bottom: 8px;
+    color: #a5d6ff;
+    font-weight: 600;
+}
+
+.notes-content p {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #cbd5e1;
+    margin: 10px 0;
+}
+
+.notes-content strong {
+    color: #fbbf24;
+    font-weight: 700;
+}
+
+.notes-content em {
+    color: #a5d6ff;
+    font-style: italic;
+}
+
+/* Tooltip Terms - Interactive Definition Hover */
+.tooltip-term {
+    position: relative;
+    border-bottom: 2px solid #60a5fa;
+    cursor: help;
+    color: #60a5fa;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    padding-bottom: 2px;
+}
+
+.tooltip-term:hover {
+    background: rgba(96, 165, 250, 0.1);
+    border-bottom-color: #3b82f6;
+    color: #93c5fd;
+}
+
+.tooltip-term.has-definition {
+    border-bottom-style: dotted;
+}
+
+/* Tooltip Popup (JS-positioned) */
+.tooltip-popup {
+    position: fixed;
+    background: rgba(15, 23, 42, 0.98);
+    border: 2px solid rgba(59, 130, 246, 0.6);
+    border-radius: 10px;
+    padding: 15px 18px;
+    width: 320px;
+    max-width: 85vw;
+    max-height: 40vh;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #e2e8f0;
+    font-weight: 400;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-y: auto;
+    z-index: 10000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.tooltip-popup.visible {
+    opacity: 1;
+}
+
+/* Image Placeholders while loading */
+.image-placeholder {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+    border: 2px dashed rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 12px;
+    margin: 15px 0;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Embedded Images in Notes - float right next to subtopic */
+.note-image {
+    float: right;
+    width: 240px;
+    margin: 4px 0 12px 18px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(15, 23, 42, 0.3);
+    shape-outside: margin-box;
+}
+
+.note-image img {
+    width: 100%;
+    height: auto;
+    max-height: 260px;
+    object-fit: contain;
+    display: block;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.note-image img:hover {
+    opacity: 0.85;
+}
+
+/* Lightbox overlay for enlarged image */
+.image-lightbox {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 99999;
+    justify-content: center;
+    align-items: center;
+    cursor: zoom-out;
+    backdrop-filter: blur(4px);
+}
+
+.image-lightbox.active {
+    display: flex;
+}
+
+.image-lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+}
+
+/* Clear float after each section */
+.notes-content h2, .notes-content h3 {
+    clear: both;
+}
+
+/* Upload loading overlay */
+.upload-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(2, 6, 23, 0.92);
+    z-index: 99999;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    gap: 20px;
+    backdrop-filter: blur(6px);
+}
+
+.upload-overlay.active {
+    display: flex;
+}
+
+.upload-overlay .upload-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(59, 130, 246, 0.2);
+    border-radius: 50%;
+    border-top-color: #3b82f6;
+    animation: spin 0.8s linear infinite;
+}
+
+.upload-overlay .upload-status {
+    color: #e2e8f0;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.upload-overlay .upload-detail {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+/* Hide upload box after PDF is loaded */
+.upload-box.hidden {
+    display: none;
+}
+
+.pdf-loaded-info {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.pdf-loaded-info .pdf-name {
+    color: #93c5fd;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.pdf-loaded-info .change-pdf-btn {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: #93c5fd;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pdf-loaded-info .change-pdf-btn:hover {
+    background: rgba(59, 130, 246, 0.3);
+}
+
+.image-credit {
+    font-size: 11px;
+    color: #64748b;
+    font-style: italic;
+}
+
+.notes-content ul, .notes-content ol {
+    margin-left: 20px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #cbd5e1;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.notes-content li {
+    margin-bottom: 8px;
+}
+
+.loading-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #94a3b8;
+    padding: 40px 20px;
+    font-size: 13px;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
+    border-radius: 50%;
+    border-top-color: #3b82f6;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Right Column - Chat */
+.chat-panel {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 15px;
+    border: 1px solid rgba(71, 85, 105, 0.3);
+    padding: 15px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+
+.chat-header {
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    margin-bottom: 12px;
+}
+
+.chat-header h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.aviator-status {
+    font-size: 11px;
+    color: #34d399;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: #34d399;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    padding-right: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.messages-container::-webkit-scrollbar {
+    width: 4px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.4);
+    border-radius: 2px;
+}
+
+.message {
+    display: flex;
+    gap: 8px;
+    animation: slideIn 0.3s ease;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.message.user {
+    justify-content: flex-end;
+}
+
+.message-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.message.ai .message-avatar {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+}
+
+.message.user .message-avatar {
+    background: rgba(71, 85, 105, 0.5);
+}
+
+.message-bubble {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    word-wrap: break-word;
+}
+
+.message.ai .message-bubble {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #cbd5e1;
+}
+
+.message.user .message-bubble {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+.chat-input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+}
+
+#chatInput {
+    flex: 1;
+    background: rgba(71, 85, 105, 0.2);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #f1f5f9;
+    font-size: 12px;
+    resize: none;
+    max-height: 60px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+#chatInput:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.7);
+    background: rgba(71, 85, 105, 0.3);
+}
+
+#chatInput::placeholder {
+    color: #64748b;
+}
+
+.chat-send-btn {
+    padding: 8px 12px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.2s;
+    height: 36px;
+    min-width: 36px;
+}
+
+.chat-send-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.3);
+}
+
+.chat-send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.note-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.note-actions button {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 11px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.regenerate-btn {
+    background: rgba(251, 191, 36, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    color: #fbbf24;
+}
+
+.regenerate-btn:hover {
+    background: rgba(251, 191, 36, 0.3);
+    border-color: rgba(251, 191, 36, 0.7);
+}
+
+/* ── Inline Edit Toolbar ── */
+.edit-toolbar {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    background: rgba(15,23,42,0.95);
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+.edit-toolbar.show { display: flex; }
+.edit-toolbar .etg {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 0 6px;
+    border-right: 1px solid rgba(71,85,105,0.25);
+}
+.edit-toolbar .etg:last-child { border-right: none; }
+.et-btn {
+    width: 30px; height: 30px;
+    border-radius: 5px; border: none;
+    background: transparent; color: #94a3b8;
+    font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+}
+.et-btn:hover { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.et-btn.active { background: rgba(59,130,246,0.25); color: #60a5fa; }
+.et-label { font-size: 10px; color: #64748b; margin-right: 3px; }
+.et-color {
+    width: 22px; height: 22px;
+    border: 2px solid rgba(71,85,105,0.4);
+    border-radius: 5px; cursor: pointer; padding: 0; background: none;
+}
+.et-color::-webkit-color-swatch-wrapper { padding: 0; }
+.et-color::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+/* Highlight color swatches in bar */
+.hl-sw {
+    width: 26px; height: 26px;
+    border-radius: 5px; border: 2px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+    flex-shrink: 0;
+}
+.hl-sw:hover { transform: scale(1.12); }
+.hl-sw.hl-active { border-color: #fff; transform: scale(1.15); }
+
+/* Draw overlay inside notes  */
+.notes-draw-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 40;
+    pointer-events: none;
+    display: none;
+}
+.notes-draw-canvas.visible { display: block; }
+.notes-draw-canvas.drawing { pointer-events: auto; cursor: crosshair; }
+
+
+/* Free-move image wrapper (absolutely positioned) */
+.free-img-wrap {
+    position: absolute;
+    z-index: 30;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    user-select: none;
+}
+.free-img-wrap:hover,
+.free-img-wrap.selected {
+    border-color: rgba(59,130,246,0.7);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.free-img-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    pointer-events: none;
+}
+/* Move handle (top bar) */
+.free-img-move {
+    position: absolute;
+    top: -28px; left: 0; right: 0;
+    height: 24px;
+    cursor: grab;
+    background: rgba(59,130,246,0.85);
+    border-radius: 6px 6px 0 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+}
+.free-img-move::before {
+    content: '\2630';
+    color: #fff;
+    font-size: 14px;
+}
+.free-img-move:active { cursor: grabbing; }
+/* Resize handle (bottom-right corner) */
+.free-img-resize {
+    position: absolute;
+    bottom: -4px; right: -4px;
+    width: 20px; height: 20px;
+    cursor: nwse-resize;
+    background: rgba(59,130,246,0.85);
+    border-radius: 4px;
+    display: none;
+    z-index: 31;
+}
+.free-img-resize::after {
+    content: '';
+    position: absolute;
+    top: 5px; left: 5px;
+    width: 8px; height: 8px;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+}
+/* Delete btn */
+.free-img-del {
+    position: absolute;
+    top: -28px; right: 0;
+    width: 24px; height: 24px;
+    cursor: pointer;
+    background: rgba(239,68,68,0.85);
+    border-radius: 0 6px 0 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #fff;
+    line-height: 1;
+}
+/* Show controls in edit mode */
+.notes-container.editing .free-img-move,
+.notes-container.editing .free-img-resize,
+.notes-container.editing .free-img-del { display: flex; }
+
+/* Inline resizable media wrapper (for flowcharts) */
+.resizable-wrap {
+    display: inline-block;
+    position: relative;
+    max-width: 100%;
+    vertical-align: top;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    transition: border-color 0.2s;
+}
+.notes-container.editing .resizable-wrap:hover {
+    border-color: rgba(59,130,246,0.5);
+}
+.resizable-wrap .mermaid,
+.resizable-wrap svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+.resize-handle {
+    position: absolute;
+    bottom: -2px; right: -2px;
+    width: 24px; height: 24px;
+    cursor: nwse-resize;
+    background: rgba(59,130,246,0.85);
+    border-radius: 4px 0 4px 0;
+    z-index: 45;
+    display: none;
+}
+.resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 6px; left: 6px;
+    width: 10px; height: 10px;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+}
+.notes-container.editing .resize-handle { display: block; }
+
+/* Draw toolbar row */
+.draw-bar {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(15,23,42,0.92);
+    border: 1px solid rgba(71,85,105,0.3);
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+.draw-bar.show { display: flex; }
+.draw-bar .et-label { margin-left: 6px; }
+.draw-bar input[type=range] { width: 70px; accent-color: #3b82f6; }
+
+/* Edit mode: make notes-container relative for canvas */
+.notes-container.editing { position: relative; }
+.notes-container.editing .notes-content { position: relative; z-index: 1; overflow: visible; }
+
+/* Flowchart insert modal */
+.fc-pick-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100000;
+    display: flex; align-items: center; justify-content: center;
+}
+.fc-pick-modal {
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 14px;
+    padding: 28px;
+    width: 460px; max-width: 90vw;
+    max-height: 70vh; overflow-y: auto;
+}
+.fc-pick-modal h3 { margin-bottom: 14px; font-size: 16px; color: #f1f5f9; }
+.fc-pick-item {
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: #cbd5e1;
+    transition: background 0.15s;
+    margin-bottom: 4px;
+}
+.fc-pick-item:hover { background: rgba(59,130,246,0.12); }
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .chat-panel {
+        width: 240px;
+    }
+}
+
+@media (max-width: 768px) {
+    .content-wrapper {
+        flex-direction: column;
+    }
+    
+    .chat-panel {
+        width: 100%;
+        height: 250px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+    <div class="nav-item" onclick="window.location.href='dashboard.html'">🏠 Home</div>
+    <div class="nav-item active">📝 PDF to Notes</div>
+    <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+    <div class="nav-item" onclick="window.location.href='flowchart.html'">📊 Flowcharts</div>
+    <div class="nav-item" onclick="window.location.href='flashcards.html'">🃏 Flashcards</div>
+    <div class="nav-item" onclick="window.location.href='aviator.html'">🤖 Aviator</div>
+    <div class="nav-item" onclick="window.location.href='library.html'">📁 Library</div></div>
+
+<div class="main-container">
+    <div class="header">
+        <h1>📄 PDF to Notes</h1>
+        <p>Convert PDFs to beautiful study notes with Aviator AI</p>
+    </div>
+
+    <div class="content-wrapper">
+        <!-- Left: Notes Panel -->
+        <div class="notes-panel">
+            <div class="upload-area">
+                <div class="upload-box" id="uploadBox" onclick="document.getElementById('pdfInput').click()">
+                    <h3>📤 Drop your PDF here</h3>
+                    <p>Click to upload a study material</p>
+                </div>
+                <div class="pdf-loaded-info" id="pdfLoadedInfo" style="display:none">
+                    <span class="pdf-name" id="loadedPdfName">📄 No PDF</span>
+                    <button class="change-pdf-btn" onclick="changePdf()">Change PDF</button>
+                </div>
+                <input type="file" id="pdfInput" accept=".pdf">
+
+                <div>
+                    <label class="understanding-selector">
+                        <span style="font-size: 12px; color: #cbd5e1; font-weight: 600; margin-bottom: 8px; display: block;">Understanding Level:</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="level-btn selected" onclick="selectLevel('beginner')">🟢 Beginner</button>
+                            <button class="level-btn" onclick="selectLevel('intermediate')">🟡 Intermediate</button>
+                            <button class="level-btn" onclick="selectLevel('advanced')">🔴 Advanced</button>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="generateNotes()" id="generateBtn">Generate Notes</button>
+                </div>
+            </div>
+
+            <!-- Edit Toolbar (hidden until Edit mode) -->
+            <div class="edit-toolbar" id="editToolbar">
+                <div class="etg">
+                    <button class="et-btn" title="Bold" onclick="eCmd('bold')"><b>B</b></button>
+                    <button class="et-btn" title="Italic" onclick="eCmd('italic')"><i>I</i></button>
+                    <button class="et-btn" title="Underline" onclick="eCmd('underline')"><u>U</u></button>
+                </div>
+                <div class="etg">
+                    <button class="et-btn" title="Heading" onclick="eCmd('formatBlock','h2')">H</button>
+                    <button class="et-btn" title="Bullet list" onclick="eCmd('insertUnorderedList')">•≡</button>
+                </div>
+                <div class="etg" style="position:relative;">
+                    <button class="et-btn" title="Highlighter" id="hlToggle" onclick="eToggleHighlight()">🖍️</button>
+                </div>
+                <div class="etg">
+                    <span class="et-label">Text</span>
+                    <input type="color" class="et-color" id="etTextColor" value="#e2e8f0" onchange="eCmd('foreColor',this.value)">
+                    <span class="et-label">BG</span>
+                    <input type="color" class="et-color" id="etBgColor" value="#0f172a" onchange="applyNoteBg(this.value)">
+                </div>
+                <div class="etg">
+                    <button class="et-btn" title="Insert Image" onclick="eInsertImg()">🖼️</button>
+                    <button class="et-btn" title="Insert Flowchart" onclick="eInsertFlowchart()">📊</button>
+                </div>
+                <div class="etg">
+                    <button class="et-btn" title="Free Draw" id="drawModeBtn" onclick="eToggleDraw()">✏️</button>
+                </div>
+                <div class="etg" style="border:none;margin-left:auto;">
+                    <button class="et-btn" title="Done Editing" onclick="exitEditMode()" style="color:#4ade80;font-size:15px;">✓</button>
+                </div>
+            </div>
+
+            <!-- Draw bar (shown in draw mode) -->
+            <div class="draw-bar" id="drawBar">
+                <button class="et-btn active" id="dbPen" title="Pen" onclick="eBrush('pen')">🖊️</button>
+                <button class="et-btn" id="dbMarker" title="Marker" onclick="eBrush('marker')">🖍️</button>
+                <button class="et-btn" id="dbEraser" title="Eraser" onclick="eBrush('eraser')">🧹</button>
+                <span class="et-label">Color</span>
+                <input type="color" class="et-color" id="drawColorIn" value="#60a5fa" onchange="_drawColor=this.value">
+                <span class="et-label">Size</span>
+                <input type="range" min="1" max="30" value="3" oninput="_drawSize=+this.value">
+                <button class="et-btn" title="Undo" onclick="eDrawUndo()" style="margin-left:auto;">↩️</button>
+                <button class="et-btn" title="Clear" onclick="eDrawClear()">🗑️</button>
+            </div>
+
+            <!-- Highlight bar (shown in highlight mode) -->
+            <div class="draw-bar" id="hlBar">
+                <span class="et-label" style="color:#cbd5e1;font-weight:600;">Highlighter</span>
+                <div class="hl-sw hl-active" style="background:rgba(250,204,21,0.6);" onclick="eHlColor('#facc15',this)" title="Yellow"></div>
+                <div class="hl-sw" style="background:rgba(74,222,128,0.6);" onclick="eHlColor('#4ade80',this)" title="Green"></div>
+                <div class="hl-sw" style="background:rgba(96,165,250,0.6);" onclick="eHlColor('#60a5fa',this)" title="Blue"></div>
+                <div class="hl-sw" style="background:rgba(244,114,182,0.6);" onclick="eHlColor('#f472b6',this)" title="Pink"></div>
+                <div class="hl-sw" style="background:rgba(251,146,60,0.6);" onclick="eHlColor('#fb923c',this)" title="Orange"></div>
+                <div class="hl-sw" style="background:rgba(167,139,250,0.6);" onclick="eHlColor('#a78bfa',this)" title="Purple"></div>
+                <span class="et-label" style="margin-left:8px;">Size</span>
+                <input type="range" min="10" max="50" value="24" id="hlSizeIn" oninput="_hlSize=+this.value">
+                <button class="et-btn" title="Undo" onclick="eDrawUndo()" style="margin-left:auto;">↩️</button>
+                <button class="et-btn" title="Clear highlights" onclick="eDrawClear()">🗑️</button>
+            </div>
+
+            <div class="notes-container" id="notesContainer">
+                <div class="notes-empty">
+                    <p>📚 No notes yet</p>
+                    <p>Upload a PDF and click "Generate Notes"</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Chat Panel (Aviator) -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <h3>🤖 Aviator</h3>
+                <div class="aviator-status">
+                    <span class="status-dot"></span>
+                    Ready to help
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <div class="message ai">
+                    <div class="message-avatar">🤖</div>
+                    <div class="message-bubble">Hi! I'm Aviator. Generate notes first, then ask me any doubts! 📚</div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="input-wrapper">
+                    <textarea id="chatInput" placeholder="Ask Aviator..." rows="1"></textarea>
+                    <button class="chat-send-btn" onclick="sendMessage()" id="chatSendBtn">↑</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:5000/api";
+let selectedFile = null;
+let selectedPdf = null;
+let understandingLevel = 'beginner';
+let serverRunning = false;
+let currentNotes = null;
+
+// Check server status
+async function checkServerStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/health`, {
+            signal: AbortSignal.timeout(2000)
+        });
+        serverRunning = response.ok;
+    } catch {
+        serverRunning = false;
+    }
+}
+
+// Select understanding level
+function selectLevel(level) {
+    // Check if Advanced mode is allowed for free tier
+    if (level === 'advanced' && !window.isFeatureAllowed('advanced_mode')) {
+        window.showUpgradeRequired('advanced_mode');
+        return;
+    }
+    understandingLevel = level;
+    document.querySelectorAll('.level-btn').forEach(btn => btn.classList.remove('selected'));
+    event.target.classList.add('selected');
+}
+
+// PDF Upload
+document.getElementById('pdfInput').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Prevent uploading if already have a PDF
+    if (selectedPdf) return;
+
+    selectedFile = file;
+    await checkServerStatus();
+
+    if (!serverRunning) {
+        addAviatorMessage("Backend server not running. Start with: python app.py");
+        return;
+    }
+
+    // Show fullscreen loading overlay
+    const overlay = document.getElementById('uploadOverlay');
+    document.getElementById('uploadStatus').textContent = `Uploading "${file.name}"...`;
+    document.getElementById('uploadDetail').textContent = 'Processing your study material';
+    overlay.classList.add('active');
+
+    // Upload PDF
+    const formData = new FormData();
+    formData.append('pdf', file);
+    formData.append('pdf_name', file.name);
+
+    try {
+        const response = await fetch(`${API_BASE}/upload-pdf`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            selectedPdf = file.name;
+            document.getElementById('generateBtn').disabled = false;
+            
+            // Hide upload box, show loaded info
+            document.getElementById('uploadBox').classList.add('hidden');
+            document.getElementById('pdfLoadedInfo').style.display = 'flex';
+            document.getElementById('loadedPdfName').textContent = `📄 ${file.name}`;
+            
+            // Update overlay briefly to show success
+            document.getElementById('uploadStatus').textContent = 'PDF Ready!';
+            document.getElementById('uploadDetail').textContent = 'Click "Generate Notes" to create your study notes';
+            setTimeout(() => overlay.classList.remove('active'), 1200);
+        } else {
+            overlay.classList.remove('active');
+            addAviatorMessage(`Upload failed: ${data.error}`);
+        }
+    } catch (error) {
+        overlay.classList.remove('active');
+        addAviatorMessage(`Error: ${error.message}`);
+    }
+});
+
+// Change PDF - reset and allow new upload
+function changePdf() {
+    selectedPdf = null;
+    selectedFile = null;
+    currentNotes = null;
+    document.getElementById('pdfInput').value = '';
+    document.getElementById('uploadBox').classList.remove('hidden');
+    document.getElementById('pdfLoadedInfo').style.display = 'none';
+    document.getElementById('generateBtn').disabled = true;
+    document.getElementById('notesContainer').innerHTML = '<div class="notes-empty"><p>📚 No notes yet</p><p>Upload a PDF and click Generate Notes</p></div>';
+}
+
+// Generate Notes
+async function generateNotes() {
+    if (!selectedPdf) {
+        addAviatorMessage("❌ Please upload a PDF first");
+        return;
+    }
+
+    const button = document.getElementById('generateBtn');
+    button.disabled = true;
+    
+    const notesContainer = document.getElementById('notesContainer');
+    notesContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div> Aviator is creating notes... (larger PDFs take longer)</div>';
+    
+    addAviatorMessage(`📝 Creating ${understandingLevel} level notes...`);
+
+    try {
+        const response = await fetch(`${API_BASE}/generate-notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pdf_name: selectedPdf,
+                level: understandingLevel
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            currentNotes = data.notes;
+            displayNotes(data.notes);
+            addAviatorMessage("✅ Notes ready! Ask me any questions about them. 💭");
+            
+            // Add action buttons
+            const actionDiv = document.createElement('div');
+            actionDiv.className = 'note-actions';
+            actionDiv.innerHTML = '<button class="regenerate-btn" onclick="regenerateNotes()">🔄 Regenerate Notes</button><button class="regenerate-btn" style="background:rgba(59,130,246,0.2);border-color:rgba(59,130,246,0.5);color:#60a5fa;" onclick="saveNotesToLibrary()">💾 Save to Library</button><button class="regenerate-btn" style="background:rgba(139,92,246,0.2);border-color:rgba(139,92,246,0.5);color:#a78bfa;" onclick="editNotesInEditor()">✏️ Edit</button>';
+            document.getElementById('notesContainer').insertBefore(actionDiv, document.getElementById('notesContainer').firstChild);
+        } else {
+            notesContainer.innerHTML = `<div class="notes-empty"><p>❌ ${data.error}</p></div>`;
+            addAviatorMessage(`❌ Error: ${data.error}`);
+        }
+    } catch (error) {
+        notesContainer.innerHTML = `<div class="notes-empty"><p>❌ ${error.message}</p></div>`;
+        addAviatorMessage(`❌ Error: ${error.message}`);
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// Regenerate Notes
+async function regenerateNotes() {
+    if (!selectedPdf) return;
+
+    const notesContainer = document.getElementById('notesContainer');
+    const oldNotes = notesContainer.innerHTML;
+    notesContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div> Regenerating different notes...</div>';
+    
+    addAviatorMessage(`🔄 Creating alternative ${understandingLevel} notes...`);
+
+    try {
+        const response = await fetch(`${API_BASE}/regenerate-notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pdf_name: selectedPdf,
+                level: understandingLevel,
+                previous_notes: currentNotes
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            currentNotes = data.notes;
+            displayNotes(data.notes);
+            addAviatorMessage("✅ New notes generated! These are different and more clear. 🎯");
+            
+            // Re-add action buttons
+            const actionDiv = document.createElement('div');
+            actionDiv.className = 'note-actions';
+            actionDiv.innerHTML = '<button class="regenerate-btn" onclick="regenerateNotes()">🔄 Regenerate Again</button><button class="regenerate-btn" style="background:rgba(59,130,246,0.2);border-color:rgba(59,130,246,0.5);color:#60a5fa;" onclick="saveNotesToLibrary()">💾 Save to Library</button><button class="regenerate-btn" style="background:rgba(139,92,246,0.2);border-color:rgba(139,92,246,0.5);color:#a78bfa;" onclick="editNotesInEditor()">✏️ Edit</button>';
+            document.getElementById('notesContainer').insertBefore(actionDiv, document.getElementById('notesContainer').firstChild);
+        } else {
+            notesContainer.innerHTML = oldNotes;
+            addAviatorMessage(`❌ Failed to regenerate: ${data.error}`);
+        }
+    } catch (error) {
+        notesContainer.innerHTML = oldNotes;
+        addAviatorMessage(`❌ Error: ${error.message}`);
+    }
+}
+
+// Save notes to library
+function saveNotesToLibrary() {
+    if (!currentNotes) return;
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+
+    // Record original container dimensions for faithful reproduction
+    const origW = nc.offsetWidth;
+    const origH = nc.scrollHeight;
+
+    // Clone content so we can manipulate without affecting the live DOM
+    const clone = nc.cloneNode(true);
+
+    // 1. Flatten canvas drawings into an <img> overlay
+    const canvas = document.getElementById('noteDrawCanvas');
+    const cloneCanvas = clone.querySelector('.notes-draw-canvas');
+    if (canvas && cloneCanvas && canvas.width > 0 && canvas.height > 0) {
+        const blank = document.createElement('canvas');
+        blank.width = canvas.width; blank.height = canvas.height;
+        if (canvas.toDataURL() !== blank.toDataURL()) {
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL('image/png');
+            img.className = 'saved-draw-overlay';
+            img.setAttribute('style', 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:40;');
+            cloneCanvas.replaceWith(img);
+        } else {
+            cloneCanvas.remove();
+        }
+    } else if (cloneCanvas) {
+        cloneCanvas.remove();
+    }
+
+    // 2. Strip free-img control handles (move / resize / delete)
+    clone.querySelectorAll('.free-img-move, .free-img-resize, .free-img-del').forEach(el => el.remove());
+    clone.querySelectorAll('.free-img-wrap').forEach(w => { delete w.dataset.attached; });
+
+    // 3. Wrap in a fixed-dimension container so preview matches editing layout exactly
+    const notesHtml = '<div class="saved-notes-wrap" data-orig-w="' + origW + '" data-orig-h="' + origH + '" style="position:relative;width:' + origW + 'px;min-height:' + origH + 'px;margin:0 auto;">' + clone.innerHTML + '</div>';
+    if (window.libraryShowSaveModal) {
+        window.libraryShowSaveModal('note', notesHtml, selectedPdf, selectedPdf ? selectedPdf.replace('.pdf', '') + ' Notes' : 'Notes', function(item) {
+            addAviatorMessage("💾 Saved to Library as \"" + item.name + "\"!");
+        });
+    }
+}
+
+// ═══════════════════════════════════════
+// INLINE NOTES EDITOR (Pro / Ultra)
+// ═══════════════════════════════════════
+let _isEditing = false;
+let _drawMode = false;
+let _drawing = false;
+let _drawColor = '#60a5fa';
+let _drawSize = 3;
+let _drawBrush = 'pen';
+let _drawCtx = null;
+let _drawStrokes = [];
+
+function editNotesInEditor() {
+    const tier = localStorage.getItem('liftoffTier') || 'free';
+    if (tier === 'free') {
+        addAviatorMessage("🔒 The Notes Editor is a Pro/Ultra feature. Upgrade to edit, highlight, and draw on your notes!");
+        if (window._subOpen) window._subOpen();
+        return;
+    }
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    _isEditing = true;
+    nc.contentEditable = 'true';
+    nc.style.outline = 'none';
+    nc.style.cursor = 'text';
+    document.getElementById('editToolbar').classList.add('show');
+    document.getElementById('notesContainer').classList.add('editing');
+    // Hide the action buttons row while editing
+    const acts = document.querySelector('.note-actions');
+    if (acts) acts.style.display = 'none';
+    addAviatorMessage('✏️ Edit mode ON — highlight, draw, insert images & flowcharts!');
+    // Ensure draw canvas exists
+    _ensureDrawCanvas();
+    // Wrap flowcharts with resize handles & re-attach free-img controls
+    setTimeout(() => {
+        wrapResizables();
+        _reattachFreeImgs();
+    }, 200);
+}
+
+function exitEditMode() {
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    _isEditing = false;
+    nc.contentEditable = 'false';
+    nc.style.cursor = '';
+    document.getElementById('editToolbar').classList.remove('show');
+    document.getElementById('drawBar').classList.remove('show');
+    document.getElementById('hlBar').classList.remove('show');
+    document.getElementById('notesContainer').classList.remove('editing');
+    if (_drawMode) eToggleDraw(); // exit draw
+    if (_hlMode) eToggleHighlight(); // exit highlight
+    // re-show action buttons
+    const acts = document.querySelector('.note-actions');
+    if (acts) acts.style.display = '';
+    addAviatorMessage('✅ Editing done!');
+}
+
+// exec command helper
+function eCmd(cmd, val) {
+    const nc = document.querySelector('.notes-content');
+    if (nc) nc.focus();
+    if (cmd === 'formatBlock') {
+        document.execCommand('formatBlock', false, '<' + val + '>');
+    } else {
+        document.execCommand(cmd, false, val || null);
+    }
+}
+
+// ── Highlighter (free-draw based) ──
+let _hlMode = false;
+let _hlColor = '#facc15';
+let _hlSize = 24;
+let _hlPoints = [];      // buffered path for current stroke
+let _hlSnapshot = null;  // ImageData before current stroke
+
+function eToggleHighlight() {
+    // If draw mode is on, turn it off first
+    if (_drawMode) eToggleDraw();
+    _hlMode = !_hlMode;
+    document.getElementById('hlToggle').classList.toggle('active', _hlMode);
+    document.getElementById('hlBar').classList.toggle('show', _hlMode);
+    const canvas = document.getElementById('noteDrawCanvas');
+    if (canvas) {
+        canvas.classList.add('visible');
+        canvas.classList.toggle('drawing', _hlMode);
+    }
+    const nc = document.querySelector('.notes-content');
+    if (nc) nc.contentEditable = !_hlMode;
+    if (_hlMode) _resizeDrawCanvas();
+}
+function eHlColor(color, el) {
+    _hlColor = color;
+    document.querySelectorAll('#hlBar .hl-sw').forEach(s => s.classList.remove('hl-active'));
+    if (el) el.classList.add('hl-active');
+}
+
+// ── Page BG ──
+function applyNoteBg(color) {
+    const nc = document.querySelector('.notes-content');
+    if (nc) nc.style.background = color;
+}
+
+// ── Insert Image (free-move, absolutely positioned) ──
+function eInsertImg() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = function () {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (ev) {
+            const nc = document.querySelector('.notes-content');
+            if (!nc) return;
+            _createFreeImg(nc, ev.target.result, 40, 40, 300);
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+function _createFreeImg(container, src, x, y, w) {
+    const wrap = document.createElement('div');
+    wrap.className = 'free-img-wrap';
+    wrap.style.left = x + 'px';
+    wrap.style.top = y + 'px';
+    wrap.style.width = (w || 300) + 'px';
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.draggable = false;
+    wrap.appendChild(img);
+
+    // Move handle
+    const moveH = document.createElement('div');
+    moveH.className = 'free-img-move';
+    wrap.appendChild(moveH);
+
+    // Resize handle
+    const resH = document.createElement('div');
+    resH.className = 'free-img-resize';
+    wrap.appendChild(resH);
+
+    // Delete btn
+    const delB = document.createElement('div');
+    delB.className = 'free-img-del';
+    delB.textContent = '✕';
+    delB.title = 'Remove image';
+    delB.addEventListener('click', () => wrap.remove());
+    wrap.appendChild(delB);
+
+    container.appendChild(wrap);
+    wrap.dataset.attached = '1';
+
+    // Attach interactions
+    _attachFreeMove(wrap, moveH, container);
+    _attachFreeResize(wrap, resH);
+}
+
+function _attachFreeMove(wrap, handle, container) {
+    let startX, startY, origLeft, origTop;
+    function onDown(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const cx = e.clientX || e.touches?.[0]?.clientX || 0;
+        const cy = e.clientY || e.touches?.[0]?.clientY || 0;
+        startX = cx; startY = cy;
+        origLeft = wrap.offsetLeft;
+        origTop = wrap.offsetTop;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onUp);
+    }
+    function onMove(e) {
+        e.preventDefault();
+        const cx = e.clientX || e.touches?.[0]?.clientX || 0;
+        const cy = e.clientY || e.touches?.[0]?.clientY || 0;
+        let newL = origLeft + (cx - startX);
+        let newT = origTop + (cy - startY);
+        // Clamp within container
+        const cw = container.offsetWidth;
+        const ch = container.offsetHeight;
+        newL = Math.max(0, Math.min(newL, cw - wrap.offsetWidth));
+        newT = Math.max(0, Math.min(newT, ch - wrap.offsetHeight));
+        wrap.style.left = newL + 'px';
+        wrap.style.top = newT + 'px';
+    }
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, {passive:false});
+}
+
+function _attachFreeResize(wrap, handle) {
+    let startX, startW;
+    function onDown(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startX = e.clientX || e.touches?.[0]?.clientX || 0;
+        startW = wrap.offsetWidth;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onUp);
+    }
+    function onMove(e) {
+        e.preventDefault();
+        const cx = e.clientX || e.touches?.[0]?.clientX || 0;
+        const newW = Math.max(60, startW + (cx - startX));
+        wrap.style.width = newW + 'px';
+    }
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, {passive:false});
+}
+
+// Re-attach drag/resize handlers to existing free-img-wraps (e.g. after saving & reopening)
+function _reattachFreeImgs() {
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    nc.querySelectorAll('.free-img-wrap').forEach(wrap => {
+        // Skip if already has listeners (check data attr)
+        if (wrap.dataset.attached) return;
+        wrap.dataset.attached = '1';
+        const moveH = wrap.querySelector('.free-img-move');
+        const resH = wrap.querySelector('.free-img-resize');
+        const delB = wrap.querySelector('.free-img-del');
+        if (moveH) _attachFreeMove(wrap, moveH, nc);
+        if (resH) _attachFreeResize(wrap, resH);
+        if (delB) delB.addEventListener('click', () => wrap.remove());
+    });
+}
+
+// ── Insert Flowchart ──
+function eInsertFlowchart() {
+    const flowcharts = window.libraryGetAllItems ? window.libraryGetAllItems('flowchart') : [];
+    let itemsHtml = '';
+    if (flowcharts.length === 0) {
+        itemsHtml = '<p style="text-align:center;color:#64748b;padding:20px;">No saved flowcharts. Generate and save one from the Flowcharts page first.</p>';
+    } else {
+        flowcharts.forEach(fc => {
+            const d = new Date(fc.createdAt).toLocaleDateString();
+            itemsHtml += '<div class="fc-pick-item" onclick="doInsertFC(\'' + fc.id + '\',\'' + fc.folderId + '\')">' +
+                '<span style="font-size:18px;">📊</span>' +
+                '<div><div style="font-weight:600;">' + fc.name + '</div>' +
+                '<div style="font-size:11px;color:#64748b;">' + fc.folderName + ' • ' + d + '</div></div></div>';
+        });
+    }
+    const ov = document.createElement('div');
+    ov.className = 'fc-pick-overlay';
+    ov.id = 'fcPickOv';
+    ov.innerHTML = '<div class="fc-pick-modal"><h3>📊 Insert Flowchart</h3>' + itemsHtml +
+        '<div style="text-align:right;margin-top:14px;"><button onclick="document.getElementById(\'fcPickOv\').remove()" style="padding:8px 16px;border-radius:8px;border:none;background:rgba(71,85,105,0.3);color:#94a3b8;cursor:pointer;font-weight:600;">Cancel</button></div></div>';
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+}
+function doInsertFC(itemId, folderId) {
+    const lib = JSON.parse(localStorage.getItem('liftoffLibrary'));
+    if (!lib) return;
+    const folder = lib.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    const item = folder.items.find(i => i.id === itemId);
+    if (!item) return;
+    document.getElementById('fcPickOv')?.remove();
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    // Create a mermaid block
+    const div = document.createElement('div');
+    div.style.cssText = 'margin:16px 0;padding:16px;background:rgba(15,23,42,0.6);border:1px solid rgba(71,85,105,0.3);border-radius:10px;text-align:center;';
+    div.innerHTML = '<div style="font-size:11px;color:#64748b;text-align:left;margin-bottom:6px;">📊 ' + item.name + '</div><div class="mermaid">' + item.content.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+    nc.appendChild(div);
+    // Render the mermaid
+    setTimeout(() => {
+        const mermaids = nc.querySelectorAll('.mermaid');
+        mermaids.forEach(m => m.removeAttribute('data-processed'));
+        if (typeof mermaid !== 'undefined') mermaid.run();
+        setTimeout(wrapResizables, 300);
+    }, 200);
+}
+
+// ── Free Draw ──
+function _ensureDrawCanvas() {
+    if (document.getElementById('noteDrawCanvas')) return;
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    const canvas = document.createElement('canvas');
+    canvas.id = 'noteDrawCanvas';
+    canvas.className = 'notes-draw-canvas';
+    nc.appendChild(canvas);
+    _drawCtx = canvas.getContext('2d');
+    canvas.addEventListener('pointerdown', _dStart);
+    canvas.addEventListener('pointermove', _dMove);
+    canvas.addEventListener('pointerup', _dEnd);
+    canvas.addEventListener('pointerleave', _dEnd);
+}
+function _resizeDrawCanvas() {
+    const canvas = document.getElementById('noteDrawCanvas');
+    if (!canvas || !_drawCtx) return;
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    const prev = canvas.toDataURL();
+    const w = nc.scrollWidth;
+    const h = nc.scrollHeight;
+    canvas.width = w;
+    canvas.height = h;
+    // Match CSS size to internal resolution so 1:1 pixel mapping
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    const img = new Image();
+    img.onload = () => _drawCtx.drawImage(img, 0, 0);
+    img.src = prev;
+}
+function eToggleDraw() {
+    // If highlight mode is on, turn it off first
+    if (_hlMode) eToggleHighlight();
+    _drawMode = !_drawMode;
+    document.getElementById('drawModeBtn').classList.toggle('active', _drawMode);
+    document.getElementById('drawBar').classList.toggle('show', _drawMode);
+    const canvas = document.getElementById('noteDrawCanvas');
+    if (canvas) {
+        canvas.classList.add('visible');
+        canvas.classList.toggle('drawing', _drawMode);
+    }
+    const nc = document.querySelector('.notes-content');
+    if (nc) nc.contentEditable = !_drawMode;
+    if (_drawMode) _resizeDrawCanvas();
+}
+function eBrush(type) {
+    _drawBrush = type;
+    document.getElementById('dbPen').classList.toggle('active', type==='pen');
+    document.getElementById('dbMarker').classList.toggle('active', type==='marker');
+    document.getElementById('dbEraser').classList.toggle('active', type==='eraser');
+}
+function _dStart(e) {
+    _drawing = true;
+    _drawStrokes.push(document.getElementById('noteDrawCanvas').toDataURL());
+    const p = _dPos(e);
+    _drawCtx.beginPath();
+    _drawCtx.moveTo(p.x, p.y);
+    if (_hlMode) {
+        // Highlighter — buffer points & snapshot so alpha stays uniform
+        const cv = document.getElementById('noteDrawCanvas');
+        _hlSnapshot = _drawCtx.getImageData(0, 0, cv.width, cv.height);
+        _hlPoints = [p];
+        _drawCtx.globalCompositeOperation = 'source-over';
+        _drawCtx.strokeStyle = _hlColor;
+        _drawCtx.lineWidth = _hlSize;
+        _drawCtx.globalAlpha = 0.35;
+        _drawCtx.lineCap = 'butt';
+        _drawCtx.lineJoin = 'miter';
+        return;
+    }
+    if (_drawBrush === 'eraser') {
+        _drawCtx.globalCompositeOperation = 'destination-out';
+        _drawCtx.lineWidth = _drawSize * 4;
+    } else if (_drawBrush === 'marker') {
+        _drawCtx.globalCompositeOperation = 'source-over';
+        _drawCtx.strokeStyle = _drawColor;
+        _drawCtx.lineWidth = _drawSize * 3;
+        _drawCtx.globalAlpha = 0.3;
+    } else {
+        _drawCtx.globalCompositeOperation = 'source-over';
+        _drawCtx.strokeStyle = _drawColor;
+        _drawCtx.lineWidth = _drawSize;
+        _drawCtx.globalAlpha = 1;
+    }
+    _drawCtx.lineCap = 'round';
+    _drawCtx.lineJoin = 'round';
+}
+function _dMove(e) {
+    if (!_drawing) return;
+    const p = _dPos(e);
+    if (_hlMode && _hlSnapshot) {
+        // Restore snapshot, then redraw full path as single stroke
+        _hlPoints.push(p);
+        _drawCtx.putImageData(_hlSnapshot, 0, 0);
+        _drawCtx.beginPath();
+        _drawCtx.moveTo(_hlPoints[0].x, _hlPoints[0].y);
+        for (let i = 1; i < _hlPoints.length; i++)
+            _drawCtx.lineTo(_hlPoints[i].x, _hlPoints[i].y);
+        _drawCtx.stroke();
+        return;
+    }
+    _drawCtx.lineTo(p.x, p.y);
+    _drawCtx.stroke();
+}
+function _dEnd() {
+    if (!_drawing) return;
+    _drawing = false;
+    _drawCtx.globalAlpha = 1;
+    _drawCtx.globalCompositeOperation = 'source-over';
+    _hlPoints = [];
+    _hlSnapshot = null;
+}
+function _dPos(e) {
+    const c = document.getElementById('noteDrawCanvas');
+    const r = c.getBoundingClientRect();
+    // Scale from CSS display size to internal canvas resolution
+    const scaleX = c.width / r.width;
+    const scaleY = c.height / r.height;
+    return {
+        x: (e.clientX - r.left) * scaleX,
+        y: (e.clientY - r.top) * scaleY
+    };
+}
+function eDrawUndo() {
+    if (_drawStrokes.length === 0) return;
+    const prev = _drawStrokes.pop();
+    const img = new Image();
+    img.onload = () => { _drawCtx.clearRect(0,0,_drawCtx.canvas.width,_drawCtx.canvas.height); _drawCtx.drawImage(img,0,0); };
+    img.src = prev;
+}
+function eDrawClear() {
+    if (!confirm('Clear all drawings?')) return;
+    _drawStrokes.push(document.getElementById('noteDrawCanvas').toDataURL());
+    _drawCtx.clearRect(0,0,_drawCtx.canvas.width,_drawCtx.canvas.height);
+    // Hide canvas if blank
+    const c = document.getElementById('noteDrawCanvas');
+    const blank = document.createElement('canvas');
+    blank.width = c.width; blank.height = c.height;
+    if (c.toDataURL() === blank.toDataURL()) c.classList.remove('visible');
+}
+
+// ── Resizable Flowcharts ──
+function wrapResizables() {
+    const nc = document.querySelector('.notes-content');
+    if (!nc) return;
+    // Wrap inserted flowchart divs
+    nc.querySelectorAll('[style*="text-align:center"]').forEach(div => {
+        if (div.closest('.resizable-wrap')) return;
+        if (!div.querySelector('.mermaid, svg')) return;
+        const wrap = document.createElement('span');
+        wrap.className = 'resizable-wrap';
+        wrap.style.width = (div.offsetWidth || 400) + 'px';
+        div.parentNode.insertBefore(wrap, div);
+        wrap.appendChild(div);
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        wrap.appendChild(handle);
+        _attachResize(wrap, handle);
+    });
+}
+function _attachResize(wrap, handle) {
+    let startX, startW;
+    function onDown(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startX = e.clientX || e.touches?.[0]?.clientX || 0;
+        startW = wrap.offsetWidth;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onUp);
+    }
+    function onMove(e) {
+        e.preventDefault();
+        const cx = e.clientX || e.touches?.[0]?.clientX || 0;
+        const newW = Math.max(60, startW + (cx - startX));
+        wrap.style.width = newW + 'px';
+    }
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, {passive:false});
+}
+
+// Display Notes with enhanced features (images, tooltips, definitions)
+function displayNotes(notes) {
+    const notesContainer = document.getElementById('notesContainer');
+    const formattedNotes = markdownToHtml(notes);
+    notesContainer.innerHTML = `<div class="notes-content">${formattedNotes}</div>`;
+    if (window.playSound) window.playSound('generate');
+    
+    // Fetch and process tooltip terms (images are now inline, no async fetch needed)
+    setTimeout(() => {
+        processTooltipTerms(notesContainer);
+    }, 500);
+}
+
+// Enhanced Markdown to HTML converter with image and tooltip support
+function markdownToHtml(markdown) {
+    let html = markdown;
+    
+    // Normalize whitespace: collapse 3+ newlines into 2, trim leading/trailing
+    html = html.replace(/\r\n/g, '\n');
+    html = html.replace(/\n{3,}/g, '\n\n');
+    html = html.trim();
+    
+    // Headers - Handle all heading levels including ####
+    html = html.replace(/^#### (.*?)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^### (.*?)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.*?)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.*?)$/gm, '<h1>$1</h1>');
+    
+    // Handle PDF Image markers [PDF_IMG:N] - each image only once (deduplicate)
+    const usedImages = new Set();
+    html = html.replace(/\[PDF_IMG:(\d+)\]/g, (match, idx) => {
+        if (usedImages.has(idx)) return ''; // skip duplicates
+        usedImages.add(idx);
+        const imgUrl = `${API_BASE}/pdf-image/${encodeURIComponent(selectedPdf)}/${idx}`;
+        return `<figure class="note-image"><img src="${imgUrl}" alt="Page ${parseInt(idx)+1}" loading="lazy" onclick="openLightbox(this.src)" onerror="this.parentElement.style.display='none'"></figure>`;
+    });
+    
+    // Also handle old [IMG:...] markers (remove them - no longer used)
+    html = html.replace(/\[IMG:(.*?)\]/g, '');
+    
+    // Bold (with tooltip term support) - capture and mark for tooltip processing
+    html = html.replace(/\*\*(.*?)\*\*/g, (match, term) => {
+        return `<span class="tooltip-term" data-term="${term.trim()}">${term}</span>`;
+    });
+    html = html.replace(/__(.*?)__/g, (match, term) => {
+        return `<span class="tooltip-term" data-term="${term.trim()}">${term}</span>`;
+    });
+    
+    // Italic
+    html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    // Bullet points
+    html = html.replace(/^\* (.*?)$/gm, '<li>$1</li>');
+    html = html.replace(/^\- (.*?)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    html = html.replace(/<\/li>\n<li>/g, '</li><li>');
+    
+    // Line breaks for paragraphs
+    html = html.split('\n\n').map(para => {
+        para = para.trim();
+        if (!para) return '';  // Skip empty paragraphs
+        if (para.includes('<h') || para.includes('<ul>') || para.includes('<ol>') || para.includes('note-image')) {
+            return para;
+        }
+        return `<p>${para}</p>`;
+    }).join('');
+    
+    // Remove empty paragraphs
+    html = html.replace(/<p>\s*<\/p>/g, '');
+    html = html.replace(/<p><br\s*\/?><\/p>/g, '');
+    
+    // Single line breaks
+    html = html.replace(/\n/g, '<br>');
+    
+    // Clean up leading/trailing <br> in paragraphs
+    html = html.replace(/<p><br\s*\/?>/g, '<p>');
+    html = html.replace(/<br\s*\/?>\s*<\/p>/g, '</p>');
+    
+    // Remove <br> right after block elements
+    html = html.replace(/(<\/h[1-4]>)(<br\s*\/?>)+/g, '$1');
+    html = html.replace(/(<\/ul>)(<br\s*\/?>)+/g, '$1');
+    html = html.replace(/(<\/ol>)(<br\s*\/?>)+/g, '$1');
+    html = html.replace(/(<\/figure>)(<br\s*\/?>)+/g, '$1');
+    // Remove <br> right before block elements
+    html = html.replace(/(<br\s*\/?>)+(<h[1-4])/g, '$2');
+    html = html.replace(/(<br\s*\/?>)+(<ul)/g, '$2');
+    html = html.replace(/(<br\s*\/?>)+(<figure)/g, '$2');
+    // Collapse consecutive <br> into one
+    html = html.replace(/(<br\s*\/?>\s*){2,}/g, '<br>');
+    // Remove stray <br> between block-level elements
+    html = html.replace(/(<\/p>)\s*(<br\s*\/?>)+\s*(<p>|<h|<ul|<ol|<figure)/g, '$1$3');
+    html = html.replace(/(<\/h[1-4]>)\s*(<br\s*\/?>)+\s*(<p>|<h|<ul|<ol|<figure)/g, '$1$3');
+    
+    return html;
+}
+
+// Process tooltip terms - fetch definitions and enable hover display
+async function processTooltipTerms(container) {
+    const tooltipTerms = container.querySelectorAll('.tooltip-term');
+    let processedCount = 0;
+    
+    for (let term of tooltipTerms) {
+        const termText = term.getAttribute('data-term');
+        
+        // Fetch definition from backend
+        try {
+            const response = await fetch(`${API_BASE}/fetch-definition`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    term: termText,
+                    context: selectedPdf || document.title,
+                    pdf_content: currentNotes.substring(0, 2000)  // Use actual notes content as context
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.definition) {
+                // Clean markdown from definition text before displaying
+                let cleanDef = data.definition
+                    .replace(/\[PDF_IMG:\d+\]/g, '')  // Remove [PDF_IMG:N] markers
+                    .replace(/\*\*/g, '')  // Remove bold markers **
+                    .replace(/__/g, '')     // Remove underline markers __
+                    .replace(/^#+\s/gm, '') // Remove heading markers (# ## ### etc)
+                    .replace(/^[*-]\s/gm, '')  // Remove bullet markers
+                    .trim();
+                
+                // Add cleaned definition as data attribute
+                term.setAttribute('data-definition', cleanDef);
+                term.setAttribute('data-source', data.source || 'ai');
+                term.classList.add('has-definition');
+                
+                // Check if this is a person/entity - try to fetch image
+                if (['Napoleon', 'Bonaparte', 'Louis XIV', 'Marie Antoinette', 'King', 'Emperor', 'Queen', 'Yeti', 'Buddha', 'Eric', 'Shipton', 'explorers'].some(word => termText.includes(word))) {
+                    fetchImageForTerm(term, termText);
+                }
+                
+                processedCount++;
+            }
+        } catch (e) {
+            console.log(`Could not fetch definition for ${termText}:`, e);
+        }
+    }
+    
+    console.log(`Processed ${processedCount} tooltip terms`);
+}
+
+// Process image placeholders - fetch images for [IMG:...] markers
+async function processImagePlaceholders(container) {
+    const imagePlaceholders = container.querySelectorAll('.image-placeholder');
+    let loadedCount = 0;
+    
+    console.log(`Found ${imagePlaceholders.length} image placeholders to load`);
+    
+    for (let placeholder of imagePlaceholders) {
+        const imageQuery = placeholder.getAttribute('data-image-query');
+        
+        console.log(`Fetching image for: ${imageQuery}`);
+        
+        try {
+            const response = await fetch(`${API_BASE}/fetch-image`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: imageQuery,
+                    context: selectedPdf || ''
+                })
+            });
+            
+            const data = await response.json();
+            
+            console.log(`Image response for ${imageQuery}:`, data);
+            
+            if (data.success && data.image_url) {
+                // Replace placeholder with actual image
+                const imageHtml = `
+                    <figure class="note-image">
+                        <img src="${data.image_url}" alt="${imageQuery}" loading="lazy" onload="console.log('Image loaded: ${imageQuery}')">
+                        <figcaption>${imageQuery} <span class="image-credit">(${data.credits || data.source})</span></figcaption>
+                    </figure>
+                `;
+                placeholder.outerHTML = imageHtml;
+                loadedCount++;
+            } else {
+                console.log(`No image found for ${imageQuery}, removing placeholder`);
+                placeholder.outerHTML = '';
+            }
+        } catch (e) {
+            console.log(`Error fetching image for ${imageQuery}:`, e);
+            placeholder.outerHTML = '';
+        }
+    }
+    
+    console.log(`Successfully loaded ${loadedCount}/${imagePlaceholders.length} images`);
+}
+
+// Fetch image for tooltip terms (people, entities)
+async function fetchImageForTerm(termElement, termText) {
+    try {
+        const response = await fetch(`${API_BASE}/fetch-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: termText,
+                context: "portrait biography historical figure"
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.image_url) {
+            termElement.setAttribute('data-image', data.image_url);
+        }
+    } catch (e) {
+        console.log(`Could not fetch image for term ${termText}`);
+    }
+}
+
+
+// Chat with Aviator
+async function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    if (!selectedPdf) {
+        addAviatorMessage("❌ Please generate notes first");
+        return;
+    }
+
+    addUserMessage(message);
+    input.value = '';
+    input.style.height = 'auto';
+
+    const sendBtn = document.getElementById('chatSendBtn');
+    sendBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pdf_name: selectedPdf,
+                question: message
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            addAviatorMessage(data.answer);
+        } else {
+            addAviatorMessage(`❌ ${data.error}`);
+        }
+    } catch (error) {
+        addAviatorMessage(`❌ Error: ${error.message}`);
+    } finally {
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+// Add messages
+function addUserMessage(text) {
+    const container = document.getElementById('messagesContainer');
+    const msg = document.createElement('div');
+    msg.className = 'message user';
+    msg.innerHTML = `
+        <div class="message-bubble">${text}</div>
+        <div class="message-avatar">👤</div>
+    `;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+}
+
+function addAviatorMessage(text) {
+    const container = document.getElementById('messagesContainer');
+    const msg = document.createElement('div');
+    msg.className = 'message ai';
+    msg.innerHTML = `
+        <div class="message-avatar">🤖</div>
+        <div class="message-bubble">${text}</div>
+    `;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+}
+
+// Auto-resize textarea
+document.getElementById('chatInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 60) + 'px';
+});
+
+// Send on Enter
+document.getElementById('chatInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// Check server on load
+window.addEventListener('load', checkServerStatus);
+
+// ── Tooltip popup (JS-positioned near word) ──
+let tooltipEl = null;
+function showTooltip(termEl) {
+    const def = termEl.getAttribute('data-definition');
+    if (!def) return;
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div');
+        tooltipEl.className = 'tooltip-popup';
+        document.body.appendChild(tooltipEl);
+    }
+    tooltipEl.textContent = def;
+    tooltipEl.classList.add('visible');
+    // Position near the word
+    const rect = termEl.getBoundingClientRect();
+    const tw = 320; // tooltip width
+    let left = rect.right + 8;
+    let top = rect.top - 4;
+    // If overflows right edge, place to the left of the word
+    if (left + tw > window.innerWidth - 16) {
+        left = rect.left - tw - 8;
+    }
+    // If still overflows left, center it
+    if (left < 8) left = 8;
+    // If overflows bottom, shift up
+    if (top + 200 > window.innerHeight) {
+        top = window.innerHeight - 220;
+    }
+    if (top < 8) top = 8;
+    tooltipEl.style.left = left + 'px';
+    tooltipEl.style.top = top + 'px';
+}
+function hideTooltip() {
+    if (tooltipEl) tooltipEl.classList.remove('visible');
+}
+// Delegate hover events on tooltip terms
+document.addEventListener('mouseover', function(e) {
+    const term = e.target.closest('.tooltip-term.has-definition');
+    if (term) showTooltip(term);
+});
+document.addEventListener('mouseout', function(e) {
+    const term = e.target.closest('.tooltip-term.has-definition');
+    if (term) hideTooltip();
+});
+
+// Lightbox functions
+function openLightbox(src) {
+    const lb = document.getElementById('imageLightbox');
+    lb.querySelector('img').src = src;
+    lb.classList.add('active');
+}
+function closeLightbox() {
+    document.getElementById('imageLightbox').classList.remove('active');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+// ── Initialize subscription restrictions ──
+function initSubscriptionRestrictions() {
+    if (!window.isFeatureAllowed) return; // Subscription.js not loaded
+    var tier = localStorage.getItem('liftoffTier') || 'free';
+    if (tier !== 'free') return; // Only restrict free tier
+    
+    var advancedBtn = document.querySelector('.level-btn:nth-child(3)'); // Advanced button
+    if (advancedBtn) {
+        advancedBtn.style.opacity = '0.5';
+        advancedBtn.style.cursor = 'not-allowed';
+        advancedBtn.title = 'Advanced Mode is only available in Pro and Ultra plans';
+    }
+}
+
+// Run when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSubscriptionRestrictions);
+} else {
+    initSubscriptionRestrictions();
+}
+</script>
+
+<!-- Upload loading overlay -->
+<div class="upload-overlay" id="uploadOverlay">
+    <div class="upload-spinner"></div>
+    <div class="upload-status" id="uploadStatus">Uploading PDF...</div>
+    <div class="upload-detail" id="uploadDetail">Processing your study material</div>
+</div>
+
+<!-- Lightbox overlay -->
+<div class="image-lightbox" id="imageLightbox" onclick="closeLightbox()">
+    <img src="" alt="Enlarged view">
+</div>
+
+</body>
+</html>

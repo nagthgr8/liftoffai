@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LiftOff - Flashcards</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="theme.js"></script>
+<script src="settings.js"></script>
+<script src="audio.js"></script>
+<script src="subscription.js"></script>
+<script src="library-save.js"></script>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #f1f5f9;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.sidebar h2 {
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+}
+
+.logo-emoji {
+    font-size: 36px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nav-item {
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.nav-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: translateX(5px);
+}
+
+.nav-item.active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+/* Main Container */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.header {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+    padding: 20px 30px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header p {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.content-wrapper {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Flashcard Panel */
+.flashcard-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Setup Stage */
+.setup-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px;
+}
+
+.upload-box {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+    border: 2px dashed rgba(59, 130, 246, 0.5);
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    width: 100%;
+    max-width: 400px;
+}
+
+.upload-box:hover {
+    border-color: rgba(59, 130, 246, 0.8);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+}
+
+.upload-box h3 { font-size: 18px; margin-bottom: 10px; }
+.upload-box p { font-size: 13px; color: #94a3b8; }
+
+#pdfInput { display: none; }
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border: none;
+    color: white;
+    padding: 12px 30px;
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* Upload/Generating overlay */
+.status-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.92);
+    z-index: 20;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    backdrop-filter: blur(8px);
+}
+
+.status-overlay.show { display: flex; }
+
+.status-overlay h3 {
+    font-size: 20px;
+    margin: 0;
+    background: linear-gradient(135deg, #60a5fa, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.status-overlay p { font-size: 13px; color: #94a3b8; margin: 0; }
+
+.loader {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(59, 130, 246, 0.2);
+    border-top: 4px solid #60a5fa;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Flashcard Study Mode */
+.study-stage {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 30px;
+    gap: 20px;
+}
+
+.study-stage.show { display: flex; }
+
+.card-progress {
+    font-size: 14px;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.progress-bar {
+    width: 200px;
+    height: 6px;
+    background: rgba(71, 85, 105, 0.3);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #f59e0b);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+/* The flashcard */
+.flashcard-container {
+    perspective: 1000px;
+    width: 100%;
+    max-width: 520px;
+    height: 300px;
+    cursor: pointer;
+}
+
+.flashcard {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.6s;
+    transform-style: preserve-3d;
+}
+
+.flashcard.flipped { transform: rotateY(180deg); }
+
+.flashcard-front, .flashcard-back {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    text-align: center;
+}
+
+.flashcard-front {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.flashcard-back {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(16, 185, 129, 0.15));
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    transform: rotateY(180deg);
+}
+
+.card-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #64748b;
+    margin-bottom: 16px;
+}
+
+.card-term {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: #e2e8f0;
+}
+
+.card-definition {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #cbd5e1;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.card-hint {
+    position: absolute;
+    bottom: 14px;
+    font-size: 11px;
+    color: #475569;
+}
+
+/* Navigation buttons */
+.card-nav {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.nav-btn {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    color: #cbd5e1;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.nav-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.know-btn, .dontknow-btn {
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.know-btn {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #34d399;
+}
+
+.know-btn:hover { background: rgba(16, 185, 129, 0.3); }
+
+.dontknow-btn {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+
+.dontknow-btn:hover { background: rgba(239, 68, 68, 0.3); }
+
+.next-after-reveal {
+    background: rgba(59, 130, 246, 0.2) !important;
+    border: 1px solid rgba(59, 130, 246, 0.5) !important;
+    color: #60a5fa !important;
+    font-weight: 600;
+    gap: 4px;
+}
+
+/* Summary */
+.summary-stage {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 20px;
+    padding: 40px;
+}
+
+.summary-stage.show { display: flex; }
+
+.summary-score {
+    font-size: 48px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #60a5fa, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.summary-text { font-size: 16px; color: #94a3b8; text-align: center; }
+
+.summary-actions { display: flex; gap: 12px; margin-top: 10px; }
+
+.btn-secondary {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    color: #cbd5e1;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* Chat Panel */
+.chat-panel {
+    width: 280px;
+    background: rgba(15, 23, 42, 0.6);
+    border-left: 1px solid rgba(71, 85, 105, 0.3);
+    display: none;
+    flex-direction: column;
+}
+
+.chat-panel.show { display: flex; }
+
+.chat-header {
+    padding: 15px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.chat-header h3 { font-size: 14px; }
+
+.aviator-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 11px;
+    color: #64748b;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: #10b981;
+    border-radius: 50%;
+}
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.message {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.message-avatar { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+
+.message-bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 220px;
+}
+
+.message.ai .message-bubble, .message.assistant .message-bubble {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #cbd5e1;
+}
+
+.message.user .message-bubble {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+.chat-input-area {
+    padding: 12px;
+    border-top: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.input-wrapper {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input-wrapper textarea {
+    flex: 1;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    border-radius: 8px;
+    color: #f1f5f9;
+    padding: 8px 12px;
+    font-size: 13px;
+    resize: none;
+    font-family: inherit;
+}
+
+.chat-send-btn {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border: none;
+    color: white;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+        <div class="nav-item" onclick="window.location.href='dashboard.html'">🏠 Home</div>
+        <div class="nav-item" onclick="window.location.href='pdf-to-notes.html'">📝 PDF to Notes</div>
+        <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+        <div class="nav-item" onclick="window.location.href='flowchart.html'">📊 Flowcharts</div>
+        <div class="nav-item active">🃏 Flashcards</div>
+        <div class="nav-item" onclick="window.location.href='aviator.html'">🤖 Aviator</div>
+        <div class="nav-item" onclick="window.location.href='library.html'">📁 Library</div>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <h1>🃏 Flashcards</h1>
+            <p>Generate study flashcards from your PDFs</p>
+        </div>
+
+        <div class="content-wrapper">
+            <div class="flashcard-panel">
+                <!-- Status Overlay -->
+                <div class="status-overlay" id="statusOverlay">
+                    <div class="loader"></div>
+                    <h3 id="statusTitle">Uploading PDF</h3>
+                    <p id="statusText">Please wait...</p>
+                </div>
+
+                <!-- Setup Stage -->
+                <div class="setup-stage" id="setupStage">
+                    <div class="upload-box" onclick="document.getElementById('pdfInput').click()">
+                        <h3>📤 Upload PDF</h3>
+                        <p>Click to select a PDF file</p>
+                    </div>
+                    <input type="file" id="pdfInput" accept=".pdf">
+                    <button class="btn-primary" id="generateBtn" onclick="generateFlashcards()" disabled>Generate Flashcards</button>
+                </div>
+
+                <!-- Study Stage -->
+                <div class="study-stage" id="studyStage">
+                    <div class="card-progress">
+                        <span id="cardCount">Card 1 of 20</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 5%"></div>
+                        </div>
+                    </div>
+
+                    <div class="flashcard-container" onclick="flipCard()">
+                        <div class="flashcard" id="flashcard">
+                            <div class="flashcard-front">
+                                <div class="card-label">Term</div>
+                                <div class="card-term" id="cardTerm">Term goes here</div>
+                                <div class="card-hint">Click to reveal answer</div>
+                            </div>
+                            <div class="flashcard-back">
+                                <div class="card-label">Definition</div>
+                                <div class="card-definition" id="cardDefinition">Definition goes here</div>
+                                <div class="card-hint">Click to flip back</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-nav">
+                        <button class="nav-btn" id="prevBtn" onclick="prevCard()" disabled>←</button>
+                        <button class="dontknow-btn" id="dontKnowBtn" onclick="markDontKnow()">✗ Don't Know</button>
+                        <button class="know-btn" id="knowBtn" onclick="markCard(true)">✓ Know It</button>
+                        <button class="nav-btn next-after-reveal" id="nextRevealBtn" onclick="advanceAfterReveal()" style="display:none; width:auto; padding:10px 24px; font-size:14px;">Next →</button>
+                        <button class="nav-btn" id="nextBtn" onclick="nextCard()">→</button>
+                    </div>
+                </div>
+
+                <!-- Summary Stage -->
+                <div class="summary-stage" id="summaryStage">
+                    <div class="summary-score" id="summaryScore">0%</div>
+                    <div class="summary-text" id="summaryText">You knew X out of Y cards</div>
+                    <div class="summary-actions">
+                        <button class="btn-secondary" onclick="restartAll()">🔄 Study All Again</button>
+                        <button class="btn-secondary" onclick="studyMissed()">📖 Study Missed Only</button>
+                        <button class="btn-secondary" onclick="resetFlashcards()">← New PDF</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aviator Chat Panel -->
+            <div class="chat-panel" id="chatPanel">
+                <div class="chat-header">
+                    <h3>🤖 Aviator</h3>
+                    <div class="aviator-status">
+                        <span class="status-dot"></span>
+                        Ready to help
+                    </div>
+                </div>
+
+                <div class="messages-container" id="messagesContainer">
+                    <div class="message ai">
+                        <div class="message-avatar">🤖</div>
+                        <div class="message-bubble">Hi! If you have any doubts about a flashcard, just ask me! 📚</div>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="input-wrapper">
+                        <textarea id="chatInput" placeholder="Ask Aviator..." rows="1"></textarea>
+                        <button class="chat-send-btn" onclick="sendMessage()" id="chatSendBtn">↑</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        let selectedPdf = null;
+        let flashcards = [];
+        let currentIndex = 0;
+        let knownCards = new Set();
+        let unknownCards = new Set();
+        let studyingSubset = null; // null = all, array = subset
+        let aviatorChatHistory = [];
+
+        // PDF Upload
+        document.getElementById('pdfInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file || selectedPdf) return;
+
+            // Show uploading overlay
+            document.getElementById('statusTitle').textContent = 'Uploading PDF';
+            document.getElementById('statusText').textContent = `Processing "${file.name}"...`;
+            document.getElementById('statusOverlay').classList.add('show');
+
+            const formData = new FormData();
+            formData.append('pdf', file);
+            formData.append('pdf_name', file.name);
+
+            try {
+                const response = await fetch(`${API_BASE}/upload-pdf`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    selectedPdf = file.name;
+                    document.getElementById('statusOverlay').classList.remove('show');
+                    document.getElementById('generateBtn').disabled = false;
+                    // Update upload box to show loaded
+                    document.querySelector('.upload-box h3').textContent = '✅ PDF Loaded';
+                    document.querySelector('.upload-box p').textContent = file.name;
+                    document.querySelector('.upload-box').style.borderColor = 'rgba(52, 211, 153, 0.5)';
+                    document.querySelector('.upload-box').style.background = 'linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(59, 130, 246, 0.1))';
+                    document.querySelector('.upload-box').style.cursor = 'default';
+                    document.querySelector('.upload-box').onclick = null;
+                } else {
+                    document.getElementById('statusOverlay').classList.remove('show');
+                    alert('Upload failed: ' + data.error);
+                }
+            } catch (error) {
+                document.getElementById('statusOverlay').classList.remove('show');
+                alert('Error: ' + error.message);
+            }
+        });
+
+        // Generate flashcards
+        async function generateFlashcards() {
+            if (!selectedPdf) return;
+
+            document.getElementById('statusTitle').textContent = 'Generating Flashcards';
+            document.getElementById('statusText').textContent = 'Creating flashcards from your PDF...';
+            document.getElementById('statusOverlay').classList.add('show');
+            document.getElementById('setupStage').style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE}/generate-flashcards`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pdf_name: selectedPdf })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    flashcards = data.flashcards;
+                    currentIndex = 0;
+                    knownCards = new Set();
+                    unknownCards = new Set();
+                    studyingSubset = null;
+                    document.getElementById('statusOverlay').classList.remove('show');
+                    document.getElementById('studyStage').classList.add('show');
+                    document.getElementById('chatPanel').classList.add('show');
+                    if (window.playSound) window.playSound('generate');
+                    displayCard();
+                } else {
+                    document.getElementById('statusOverlay').classList.remove('show');
+                    document.getElementById('setupStage').style.display = 'flex';
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                document.getElementById('statusOverlay').classList.remove('show');
+                document.getElementById('setupStage').style.display = 'flex';
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Display current card
+        function displayCard() {
+            if (window.playSound) window.playSound('flashcardnew');
+            const deck = studyingSubset || flashcards;
+            const card = deck[currentIndex];
+            if (!card) return;
+
+            document.getElementById('cardTerm').textContent = card.term;
+            document.getElementById('cardDefinition').textContent = card.definition;
+            document.getElementById('cardCount').textContent = `Card ${currentIndex + 1} of ${deck.length}`;
+            document.getElementById('progressFill').style.width = `${((currentIndex + 1) / deck.length) * 100}%`;
+
+            // Reset flip
+            document.getElementById('flashcard').classList.remove('flipped');
+
+            // Update nav buttons
+            document.getElementById('prevBtn').disabled = currentIndex === 0;
+
+            // Reset button visibility
+            document.getElementById('knowBtn').style.display = '';
+            document.getElementById('dontKnowBtn').style.display = '';
+            document.getElementById('nextRevealBtn').style.display = 'none';
+        }
+
+        function flipCard() {
+            document.getElementById('flashcard').classList.toggle('flipped');
+        }
+
+        function nextCard() {
+            const deck = studyingSubset || flashcards;
+            if (currentIndex < deck.length - 1) {
+                currentIndex++;
+                displayCard();
+            }
+        }
+
+        function prevCard() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                displayCard();
+            }
+        }
+
+        function markDontKnow() {
+            const deck = studyingSubset || flashcards;
+            const card = deck[currentIndex];
+            const globalIndex = flashcards.indexOf(card);
+            unknownCards.add(globalIndex);
+            knownCards.delete(globalIndex);
+
+            // Flip card to reveal answer
+            document.getElementById('flashcard').classList.add('flipped');
+
+            // Hide know/don't-know, show Next arrow
+            document.getElementById('knowBtn').style.display = 'none';
+            document.getElementById('dontKnowBtn').style.display = 'none';
+            document.getElementById('nextRevealBtn').style.display = 'flex';
+        }
+
+        function advanceAfterReveal() {
+            const deck = studyingSubset || flashcards;
+            if (currentIndex < deck.length - 1) {
+                currentIndex++;
+                displayCard();
+            } else {
+                showSummary();
+            }
+        }
+
+        function markCard(known) {
+            const deck = studyingSubset || flashcards;
+            const card = deck[currentIndex];
+            const globalIndex = flashcards.indexOf(card);
+
+            if (known) {
+                knownCards.add(globalIndex);
+                unknownCards.delete(globalIndex);
+            }
+
+            // Move to next or finish
+            if (currentIndex < deck.length - 1) {
+                currentIndex++;
+                displayCard();
+            } else {
+                showSummary();
+            }
+        }
+
+        function showSummary() {
+            const deck = studyingSubset || flashcards;
+            const total = deck.length;
+            const known = knownCards.size;
+            const percentage = Math.round((known / flashcards.length) * 100);
+
+            document.getElementById('studyStage').classList.remove('show');
+            document.getElementById('summaryStage').classList.add('show');
+            document.getElementById('summaryScore').textContent = percentage + '%';
+            document.getElementById('summaryText').textContent = `You knew ${known} out of ${flashcards.length} cards`;
+        }
+
+        function restartAll() {
+            currentIndex = 0;
+            knownCards = new Set();
+            unknownCards = new Set();
+            studyingSubset = null;
+            document.getElementById('summaryStage').classList.remove('show');
+            document.getElementById('studyStage').classList.add('show');
+            displayCard();
+        }
+
+        function studyMissed() {
+            if (unknownCards.size === 0) {
+                alert('You got them all right! Try studying all cards again.');
+                return;
+            }
+            studyingSubset = [...unknownCards].map(i => flashcards[i]);
+            currentIndex = 0;
+            knownCards = new Set();
+            unknownCards = new Set();
+            document.getElementById('summaryStage').classList.remove('show');
+            document.getElementById('studyStage').classList.add('show');
+            displayCard();
+        }
+
+        function resetFlashcards() {
+            selectedPdf = null;
+            flashcards = [];
+            currentIndex = 0;
+            knownCards = new Set();
+            unknownCards = new Set();
+            studyingSubset = null;
+            document.getElementById('summaryStage').classList.remove('show');
+            document.getElementById('studyStage').classList.remove('show');
+            document.getElementById('chatPanel').classList.remove('show');
+            document.getElementById('setupStage').style.display = 'flex';
+            document.getElementById('generateBtn').disabled = true;
+            document.getElementById('pdfInput').value = '';
+            // Reset upload box
+            document.querySelector('.upload-box h3').textContent = '📤 Upload PDF';
+            document.querySelector('.upload-box p').textContent = 'Click to select a PDF file';
+            document.querySelector('.upload-box').style.borderColor = 'rgba(59, 130, 246, 0.5)';
+            document.querySelector('.upload-box').style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1))';
+            document.querySelector('.upload-box').style.cursor = 'pointer';
+            document.querySelector('.upload-box').onclick = function() { document.getElementById('pdfInput').click(); };
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'TEXTAREA') return;
+            const studyVisible = document.getElementById('studyStage').classList.contains('show');
+            if (!studyVisible) return;
+
+            if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flipCard(); }
+            if (e.key === 'ArrowLeft') prevCard();
+            if (e.key === 'ArrowRight') nextCard();
+        });
+
+        // Aviator chat
+        async function sendMessage() {
+            // Check if Aviator access is allowed for free tier in non-Aviator pages
+            if (window.isFeatureAllowed && !window.isFeatureAllowed('aviator_everywhere')) {
+                if (window.showUpgradeRequired) {
+                    window.showUpgradeRequired('aviator_everywhere');
+                }
+                return;
+            }
+
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const container = document.getElementById('messagesContainer');
+
+            // User message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.innerHTML = `<div class="message-avatar">👤</div><div class="message-bubble">${text}</div>`;
+            container.appendChild(userMsg);
+            input.value = '';
+            container.scrollTop = container.scrollHeight;
+
+            aviatorChatHistory.push({ role: 'user', content: text });
+
+            try {
+                const deck = studyingSubset || flashcards;
+                const currentCard = deck[currentIndex];
+                const cardContext = currentCard ? `Current flashcard — Term: "${currentCard.term}", Definition: "${currentCard.definition}"` : '';
+
+                const response = await fetch(`${API_BASE}/aviator-chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: text,
+                        pdf_name: selectedPdf,
+                        context: cardContext,
+                        chat_history: aviatorChatHistory.slice(-10)
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    const reply = data.response || data.answer;
+                    const aiMsg = document.createElement('div');
+                    aiMsg.className = 'message assistant';
+                    aiMsg.innerHTML = `<div class="message-avatar">🤖</div><div class="message-bubble">${reply}</div>`;
+                    container.appendChild(aiMsg);
+                    aviatorChatHistory.push({ role: 'assistant', content: reply });
+                    container.scrollTop = container.scrollHeight;
+                }
+            } catch (error) {
+                const errMsg = document.createElement('div');
+                errMsg.className = 'message ai';
+                errMsg.innerHTML = `<div class="message-avatar">🤖</div><div class="message-bubble">Sorry, I couldn't process that. Try again.</div>`;
+                container.appendChild(errMsg);
+            }
+        }
+
+        // Enter to send
+        document.getElementById('chatInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>

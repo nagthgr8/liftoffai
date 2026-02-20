@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Login - LiftOff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #111827;
+    color: #f3f4f6;
+}
+
+/* Floating dots */
+.dot {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: #9ca3af;
+    border-radius: 50%;
+    opacity: 0.6;
+    animation: float linear infinite;
+}
+
+@keyframes float {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-200vh); }
+}
+
+.card {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 12px;
+    width: 320px;
+    text-align: center;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #374151;
+    background: #1f2937;
+    color: #f3f4f6;
+    box-sizing: border-box;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 15px;
+    border-radius: 8px;
+    border: none;
+    background: #f3f4f6;
+    color: #111827;
+    cursor: pointer;
+}
+
+.small {
+    font-size: 13px;
+    margin-top: 15px;
+    color: #9ca3af;
+    cursor: pointer;
+    text-align: center;
+    width: 100%;
+
+}
+.small:hover {
+    text-decoration: underline;
+}
+
+</style>
+</head>
+
+<body>
+
+<script>
+for(let i=0;i<120;i++){
+    let dot=document.createElement("div");
+    dot.className="dot";
+    dot.style.left=Math.random()*100+"vw";
+    dot.style.top=Math.random()*200+"vh";
+    dot.style.animationDuration=(20+Math.random()*15)+"s";
+    document.body.appendChild(dot);
+}
+function loginUser() {
+    const input = document.getElementById("loginInput");
+    const password = document.getElementById("loginPassword");
+
+    const savedUser = JSON.parse(localStorage.getItem("liftoffUser"));
+
+    if (!savedUser) {
+        alert("No account found. Please sign up.");
+        return;
+    }
+
+    if (
+        (input.value === savedUser.email ||
+         input.value === savedUser.username) &&
+        password.value === savedUser.password
+    ) {
+        window.location.href = "dashboard.html";
+    } else {
+        input.style.border = "1px solid red";
+        password.style.border = "1px solid red";
+    }
+}
+
+</script>
+
+<div class="card">
+    <h2>Login</h2>
+    <input type="text" id="loginInput" placeholder="Email or Username">
+    <input type="password" id="loginPassword" placeholder="Password">
+    <button onclick="loginUser()">Login</button>
+    <div class="small" onclick="window.location.href='signup.html'">
+        Don't have an account? Sign Up
+    </div>
+</div>
+
+</body>
+</html>

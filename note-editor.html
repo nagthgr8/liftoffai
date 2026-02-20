@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Note Editor - LiftOff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="theme.js"></script>
+<script src="settings.js"></script>
+<script src="audio.js"></script>
+<script src="subscription.js"></script>
+<script src="library-save.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0a0f1a;
+    color: #e2e8f0;
+    display: flex;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+    width: 240px;
+    background: rgba(15, 23, 42, 0.8);
+    height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+    border-right: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+.sidebar h2 {
+    margin-bottom: 30px; font-size: 24px; font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    display: flex; align-items: center; gap: 10px; line-height: 1.2;
+}
+.logo-emoji { font-size: 36px; flex-shrink: 0; background: linear-gradient(135deg, #60a5fa, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.nav-item {
+    padding: 12px 15px; margin-bottom: 10px; border-radius: 10px;
+    cursor: pointer; transition: all 0.3s; font-size: 14px;
+}
+.nav-item:hover { background: rgba(59, 130, 246, 0.2); transform: translateX(5px); }
+.nav-item.active { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: white; }
+
+/* ── Main Editor Area ── */
+.editor-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ── Top Toolbar ── */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    background: rgba(15, 23, 42, 0.9);
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    border-right: 1px solid rgba(71, 85, 105, 0.25);
+}
+.toolbar-group:last-child { border-right: none; }
+.tb {
+    width: 34px; height: 34px;
+    border-radius: 6px; border: none;
+    background: transparent; color: #94a3b8;
+    font-size: 15px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; position: relative;
+}
+.tb:hover { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.tb.active { background: rgba(59,130,246,0.25); color: #60a5fa; }
+.tb[title]:hover::after {
+    content: attr(title);
+    position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
+    background: #1e293b; color: #cbd5e1; font-size: 11px; padding: 4px 8px;
+    border-radius: 4px; white-space: nowrap; z-index: 99; pointer-events: none;
+}
+.tb-label { font-size: 11px; color: #64748b; margin-right: 4px; }
+
+/* Color picker mini */
+.color-pick {
+    width: 26px; height: 26px; border: 2px solid rgba(71,85,105,0.4);
+    border-radius: 6px; cursor: pointer; padding: 0; background: none;
+}
+.color-pick::-webkit-color-swatch-wrapper { padding: 0; }
+.color-pick::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+/* ── Page Tabs ── */
+.page-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 20px;
+    background: rgba(15, 23, 42, 0.6);
+    border-bottom: 1px solid rgba(71, 85, 105, 0.2);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+.page-tab {
+    padding: 8px 16px;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid rgba(71,85,105,0.3);
+    border-bottom: none;
+    background: rgba(30,41,59,0.4);
+    color: #94a3b8;
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.page-tab:hover { background: rgba(59,130,246,0.1); color: #cbd5e1; }
+.page-tab.active { background: rgba(30,41,59,0.8); color: #f1f5f9; border-color: rgba(59,130,246,0.3); }
+.page-tab .close-tab {
+    width: 16px; height: 16px; border-radius: 3px; border: none;
+    background: transparent; color: #64748b; font-size: 12px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.page-tab .close-tab:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+.add-page-btn {
+    width: 30px; height: 30px; border-radius: 6px;
+    border: 1px dashed rgba(71,85,105,0.4);
+    background: transparent; color: #64748b;
+    font-size: 16px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+}
+.add-page-btn:hover { border-color: #3b82f6; color: #60a5fa; }
+
+/* ── Editor Content ── */
+.editor-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    justify-content: center;
+    padding: 30px;
+    background: #0a0f1a;
+}
+
+.page-canvas {
+    width: 95%;
+    min-height: 600px;
+    background: #1e293b;
+    border-radius: 12px;
+    border: 1px solid rgba(71,85,105,0.3);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: visible;
+}
+
+.page-content {
+    min-height: 600px;
+    padding: 40px;
+    outline: none;
+    font-size: 15px;
+    line-height: 1.8;
+    color: #e2e8f0;
+    position: relative;
+    z-index: 1;
+}
+.page-content:empty::before {
+    content: 'Start typing or paste your content...';
+    color: #475569;
+    pointer-events: none;
+}
+.page-content h1, .page-content h2, .page-content h3, .page-content h4 { color: #f1f5f9; margin: 14px 0 8px; }
+.page-content h2, .page-content h3 { clear: both; }
+.page-content p { margin-bottom: 10px; }
+.page-content ul, .page-content ol { padding-left: 24px; margin-bottom: 10px; }
+.page-content li { margin-bottom: 4px; }
+.page-content figure { margin: 12px 0; }
+.page-content strong { color: #fbbf24; font-weight: 700; }
+.page-content em { color: #a5d6ff; font-style: italic; }
+
+/* PDF images — float right exactly like in pdf-to-notes */
+.page-content .note-image {
+    float: right;
+    width: 240px;
+    margin: 4px 0 12px 18px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(15, 23, 42, 0.3);
+    shape-outside: margin-box;
+}
+.page-content .note-image img {
+    width: 100%;
+    height: auto;
+    max-height: 260px;
+    object-fit: contain;
+    display: block;
+    cursor: pointer;
+}
+
+/* Tooltip terms */
+.page-content .tooltip-term {
+    border-bottom: 2px solid #60a5fa;
+    color: #60a5fa;
+    font-weight: 600;
+    padding-bottom: 2px;
+}
+.page-content .tooltip-term.has-definition { border-bottom-style: dotted; }
+
+/* Resizable flowchart wraps */
+.page-content .resizable-wrap {
+    display: inline-block;
+    position: relative;
+    max-width: 100%;
+    vertical-align: top;
+    border-radius: 6px;
+}
+.page-content .resizable-wrap .mermaid,
+.page-content .resizable-wrap svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+/* Inserted flowchart label */
+.page-content .fc-label {
+    font-size: 12px;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
+/* Free-move image wrapper */
+.free-img-wrap {
+    position: absolute;
+    z-index: 30;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    user-select: none;
+}
+.free-img-wrap:hover,
+.free-img-wrap.selected {
+    border-color: rgba(59,130,246,0.7);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+.free-img-wrap img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    pointer-events: none;
+}
+.free-img-move {
+    position: absolute;
+    top: -28px; left: 0; right: 0;
+    height: 24px;
+    cursor: grab;
+    background: rgba(59,130,246,0.85);
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.free-img-move::before {
+    content: '\2630';
+    color: #fff;
+    font-size: 14px;
+}
+.free-img-move:active { cursor: grabbing; }
+.free-img-resize {
+    position: absolute;
+    bottom: -4px; right: -4px;
+    width: 20px; height: 20px;
+    cursor: nwse-resize;
+    background: rgba(59,130,246,0.85);
+    border-radius: 4px;
+    z-index: 31;
+}
+.free-img-resize::after {
+    content: '';
+    position: absolute;
+    top: 5px; left: 5px;
+    width: 8px; height: 8px;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+}
+.free-img-del {
+    position: absolute;
+    top: -28px; right: 0;
+    width: 24px; height: 24px;
+    cursor: pointer;
+    background: rgba(239,68,68,0.85);
+    border-radius: 0 6px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #fff;
+    line-height: 1;
+}
+
+/* Drawing canvas overlay */
+.draw-canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    cursor: crosshair;
+    display: none;
+}
+.draw-canvas.active { display: block; }
+
+/* Highlight styles */
+.hl-yellow { background: rgba(250, 204, 21, 0.35); padding: 1px 2px; border-radius: 2px; }
+.hl-green { background: rgba(74, 222, 128, 0.35); padding: 1px 2px; border-radius: 2px; }
+.hl-blue { background: rgba(96, 165, 250, 0.35); padding: 1px 2px; border-radius: 2px; }
+.hl-pink { background: rgba(244, 114, 182, 0.35); padding: 1px 2px; border-radius: 2px; }
+.hl-orange { background: rgba(251, 146, 60, 0.35); padding: 1px 2px; border-radius: 2px; }
+.hl-purple { background: rgba(167, 139, 250, 0.35); padding: 1px 2px; border-radius: 2px; }
+
+/* Mermaid flowcharts in notes */
+.inserted-flowchart {
+    margin: 16px 0;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(71,85,105,0.3);
+    border-radius: 10px;
+    text-align: center;
+}
+.inserted-flowchart .fc-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 8px;
+    text-align: left;
+}
+
+/* ── Highlight Picker Dropdown ── */
+.hl-dropdown {
+    position: absolute;
+    top: 40px; left: 0;
+    background: #1e293b;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 8px;
+    padding: 6px;
+    display: none;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    z-index: 9999;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 140px;
+}
+.hl-dropdown.show { display: flex; }
+.hl-swatch {
+    width: 28px; height: 28px;
+    border-radius: 6px; border: 2px solid transparent;
+    cursor: pointer; transition: all 0.15s;
+}
+.hl-swatch:hover { transform: scale(1.15); }
+.hl-swatch.active { border-color: #fff; }
+.hl-swatch.clear { background: linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%); border: 1px solid rgba(71,85,105,0.4); }
+
+/* ── Flowchart Insert Modal ── */
+.fc-modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100000;
+    display: flex; align-items: center; justify-content: center;
+}
+.fc-modal {
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 14px;
+    padding: 28px;
+    width: 500px; max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+.fc-modal h3 { margin-bottom: 16px; font-size: 16px; color: #f1f5f9; }
+.fc-item {
+    padding: 12px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; color: #cbd5e1;
+    transition: background 0.15s;
+    border: 1px solid transparent;
+    margin-bottom: 6px;
+}
+.fc-item:hover { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.2); }
+.fc-item-icon { font-size: 20px; }
+.fc-item-name { font-weight: 600; }
+.fc-item-meta { font-size: 11px; color: #64748b; }
+.fc-empty { text-align: center; padding: 30px; color: #64748b; }
+
+/* ── Draw Toolbar ── */
+.draw-toolbar {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(15, 23, 42, 0.95);
+    border-bottom: 1px solid rgba(71,85,105,0.3);
+    flex-shrink: 0;
+}
+.draw-toolbar.show { display: flex; }
+.draw-toolbar .tb-label { margin-left: 8px; }
+.brush-size {
+    width: 80px;
+    accent-color: #3b82f6;
+}
+
+/* ── Save bar ── */
+.save-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: rgba(15, 23, 42, 0.85);
+    border-top: 1px solid rgba(71, 85, 105, 0.3);
+    flex-shrink: 0;
+}
+.save-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.save-bar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+.save-bar-info {
+    font-size: 11px;
+    color: #64748b;
+}
+.save-bar-btns {
+    display: flex; gap: 8px;
+}
+.save-bar-btns button {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-save {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff;
+}
+.btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(59,130,246,0.3); }
+.btn-cancel {
+    background: rgba(71,85,105,0.3);
+    color: #94a3b8;
+}
+.btn-cancel:hover { background: rgba(71,85,105,0.5); }
+
+/* Tier lock */
+.tier-lock-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 100001;
+    display: flex; align-items: center; justify-content: center;
+}
+.tier-lock-card {
+    background: #0f172a;
+    border: 1px solid rgba(71,85,105,0.4);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    max-width: 420px;
+}
+.tier-lock-card h2 { font-size: 20px; margin-bottom: 12px; }
+.tier-lock-card p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; line-height: 1.6; }
+.tier-lock-card button {
+    padding: 12px 28px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: #fff;
+}
+</style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+        <div class="nav-item" onclick="window.location.href='dashboard.html'">🏠 Home</div>
+        <div class="nav-item" onclick="window.location.href='pdf-to-notes.html'">📝 PDF to Notes</div>
+        <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+        <div class="nav-item" onclick="window.location.href='flowchart.html'">📊 Flowcharts</div>
+        <div class="nav-item" onclick="window.location.href='flashcards.html'">🃏 Flashcards</div>
+        <div class="nav-item" onclick="window.location.href='aviator.html'">🤖 Aviator</div>
+        <div class="nav-item active" onclick="window.location.href='library.html'">📁 Library</div>
+    </div>
+
+    <div class="editor-wrap">
+        <!-- Toolbar -->
+        <div class="toolbar" id="mainToolbar">
+            <!-- Text Format -->
+            <div class="toolbar-group">
+                <button class="tb" title="Bold" onclick="execCmd('bold')"><b>B</b></button>
+                <button class="tb" title="Italic" onclick="execCmd('italic')"><i>I</i></button>
+                <button class="tb" title="Underline" onclick="execCmd('underline')"><u>U</u></button>
+                <button class="tb" title="Strikethrough" onclick="execCmd('strikeThrough')"><s>S</s></button>
+            </div>
+            <!-- Headings -->
+            <div class="toolbar-group">
+                <button class="tb" title="Heading 1" onclick="execCmd('formatBlock','h1')">H1</button>
+                <button class="tb" title="Heading 2" onclick="execCmd('formatBlock','h2')">H2</button>
+                <button class="tb" title="Heading 3" onclick="execCmd('formatBlock','h3')">H3</button>
+                <button class="tb" title="Paragraph" onclick="execCmd('formatBlock','p')">¶</button>
+            </div>
+            <!-- Lists -->
+            <div class="toolbar-group">
+                <button class="tb" title="Bullet List" onclick="execCmd('insertUnorderedList')">•≡</button>
+                <button class="tb" title="Numbered List" onclick="execCmd('insertOrderedList')">1.</button>
+            </div>
+            <!-- Colors -->
+            <div class="toolbar-group">
+                <span class="tb-label">Text</span>
+                <input type="color" class="color-pick" id="textColorPick" value="#e2e8f0" onchange="applyTextColor(this.value)">
+                <span class="tb-label">BG</span>
+                <input type="color" class="color-pick" id="pageBgPick" value="#1e293b" onchange="applyPageBg(this.value)">
+            </div>
+            <!-- Highlight -->
+            <div class="toolbar-group" style="position:relative;">
+                <button class="tb" title="Highlight" id="hlBtn" onclick="toggleHighlightPicker()">🖍️</button>
+                <div class="hl-dropdown" id="hlDropdown">
+                    <div class="hl-swatch" style="background:rgba(250,204,21,0.5);" onclick="applyHighlight('hl-yellow')"></div>
+                    <div class="hl-swatch" style="background:rgba(74,222,128,0.5);" onclick="applyHighlight('hl-green')"></div>
+                    <div class="hl-swatch" style="background:rgba(96,165,250,0.5);" onclick="applyHighlight('hl-blue')"></div>
+                    <div class="hl-swatch" style="background:rgba(244,114,182,0.5);" onclick="applyHighlight('hl-pink')"></div>
+                    <div class="hl-swatch" style="background:rgba(251,146,60,0.5);" onclick="applyHighlight('hl-orange')"></div>
+                    <div class="hl-swatch" style="background:rgba(167,139,250,0.5);" onclick="applyHighlight('hl-purple')"></div>
+                    <div class="hl-swatch clear" title="Remove highlight" onclick="removeHighlight()"></div>
+                </div>
+            </div>
+            <!-- Insert -->
+            <div class="toolbar-group">
+                <button class="tb" title="Insert Image" onclick="insertImage()">🖼️</button>
+                <button class="tb" title="Insert Flowchart" onclick="showFlowchartPicker()">📊</button>
+            </div>
+            <!-- Draw toggle -->
+            <div class="toolbar-group">
+                <button class="tb" title="Free Draw" id="drawToggle" onclick="toggleDraw()">✏️</button>
+            </div>
+        </div>
+
+        <!-- Draw Toolbar (shown when drawing mode active) -->
+        <div class="draw-toolbar" id="drawToolbar">
+            <span class="tb-label">Brush</span>
+            <button class="tb active" id="brushPen" title="Pen" onclick="setBrush('pen')">🖊️</button>
+            <button class="tb" id="brushMarker" title="Marker" onclick="setBrush('marker')">🖍️</button>
+            <button class="tb" id="brushEraser" title="Eraser" onclick="setBrush('eraser')">🧹</button>
+            <span class="tb-label">Color</span>
+            <input type="color" class="color-pick" id="drawColorPick" value="#60a5fa" onchange="drawColor=this.value">
+            <span class="tb-label">Size</span>
+            <input type="range" class="brush-size" id="brushSize" min="1" max="30" value="3" oninput="drawSize=+this.value">
+            <button class="tb" title="Clear drawing" onclick="clearDrawing()" style="margin-left:auto;">🗑️</button>
+            <button class="tb" title="Undo stroke" onclick="undoStroke()">↩️</button>
+        </div>
+
+        <!-- Page Tabs -->
+        <div class="page-tabs" id="pageTabs"></div>
+
+        <!-- Editor Body -->
+        <div class="editor-body" id="editorBody">
+            <div class="page-canvas" id="pageCanvas">
+                <div class="page-content" id="pageContent" contenteditable="true"></div>
+                <canvas class="draw-canvas" id="drawCanvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Save Bar -->
+        <div class="save-bar">
+            <div class="save-bar-left">
+                <span class="save-bar-title" id="noteTitle">Untitled Notes</span>
+                <span class="save-bar-info" id="noteInfo"></span>
+            </div>
+            <div class="save-bar-btns">
+                <button class="btn-cancel" onclick="exitEditor()">← Back</button>
+                <button class="btn-save" onclick="saveNote()">💾 Save</button>
+            </div>
+        </div>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+// ═══════════════════════════════════════
+// AUTH + TIER CHECK
+// ═══════════════════════════════════════
+const user = JSON.parse(localStorage.getItem('liftoffUser'));
+if (!user) window.location.href = 'login.html';
+
+const tier = (localStorage.getItem('liftoffTier') || 'free');
+if (tier === 'free') {
+    document.body.insertAdjacentHTML('beforeend', `
+        <div class="tier-lock-overlay">
+            <div class="tier-lock-card">
+                <h2>🔒 Pro Feature</h2>
+                <p>The Notes Editor is available for Pro and Ultra subscribers. Upgrade to edit, highlight, draw, and customize your notes!</p>
+                <button onclick="if(window._subOpen)window._subOpen();else window.location.href='dashboard.html'">Upgrade Now</button>
+            </div>
+        </div>
+    `);
+}
+
+// ═══════════════════════════════════════
+// PAGE DATA MODEL
+// ═══════════════════════════════════════
+let pages = []; // Array of { id, title, html, bgColor, drawData }
+let activePageIdx = 0;
+let noteId = null;     // Library item id (if editing existing)
+let noteFolderId = null;
+let noteName = 'Untitled Notes';
+let notePdfName = '';
+
+// ═══════════════════════════════════════
+// INIT — load from URL params or blank
+// ═══════════════════════════════════════
+function initEditor() {
+    const params = new URLSearchParams(window.location.search);
+    const itemId = params.get('id');
+    const folderId = params.get('folder');
+    const fromNotes = params.get('from');  // 'pdf-to-notes' for direct editing
+
+    if (fromNotes === 'pdf-to-notes') {
+        // Loaded from pdf-to-notes page — content stored in sessionStorage
+        const content = sessionStorage.getItem('editNoteContent') || '';
+        const pdfName = sessionStorage.getItem('editNotePdf') || '';
+        notePdfName = pdfName;
+        noteName = pdfName ? pdfName.replace('.pdf', '') + ' Notes' : 'Edited Notes';
+        pages = [{ id: 'p1', title: 'Page 1', html: content, bgColor: '#1e293b', drawData: null }];
+        sessionStorage.removeItem('editNoteContent');
+        sessionStorage.removeItem('editNotePdf');
+    } else if (itemId && folderId) {
+        // Editing from library
+        const lib = JSON.parse(localStorage.getItem('liftoffLibrary'));
+        if (lib) {
+            const folder = lib.folders.find(f => f.id === folderId);
+            if (folder) {
+                const item = folder.items.find(i => i.id === itemId);
+                if (item) {
+                    noteId = item.id;
+                    noteFolderId = folderId;
+                    noteName = item.name;
+                    notePdfName = item.pdfName || '';
+
+                    // Parse pages from content
+                    if (item.editorPages) {
+                        pages = item.editorPages;
+                    } else {
+                        // First time editing — wrap existing HTML as single page
+                        pages = [{ id: 'p1', title: 'Page 1', html: item.content, bgColor: '#1e293b', drawData: null }];
+                    }
+                }
+            }
+        }
+    }
+
+    if (pages.length === 0) {
+        pages = [{ id: 'p1', title: 'Page 1', html: '', bgColor: '#1e293b', drawData: null }];
+    }
+
+    document.getElementById('noteTitle').textContent = noteName;
+    document.getElementById('noteInfo').textContent = notePdfName ? 'from ' + notePdfName : '';
+
+    renderPageTabs();
+    initDrawCanvas();
+    switchPage(0);
+
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+}
+
+// ═══════════════════════════════════════
+// PAGE TABS
+// ═══════════════════════════════════════
+function renderPageTabs() {
+    const container = document.getElementById('pageTabs');
+    let html = '';
+    pages.forEach((p, i) => {
+        const active = i === activePageIdx ? ' active' : '';
+        html += `<div class="page-tab${active}" onclick="switchPage(${i})">
+            ${escH(p.title)}
+            ${pages.length > 1 ? `<button class="close-tab" onclick="event.stopPropagation();removePage(${i})">✕</button>` : ''}
+        </div>`;
+    });
+    html += `<button class="add-page-btn" onclick="addPage()" title="Add page">+</button>`;
+    container.innerHTML = html;
+}
+
+let _editorReady = false; // guard against first saveCurrent clobbering loaded data
+function switchPage(idx) {
+    // Save current page content (skip on very first call before editor is populated)
+    if (_editorReady) saveCurrent();
+    _editorReady = true;
+    activePageIdx = idx;
+    const page = pages[idx];
+    const content = document.getElementById('pageContent');
+    const canvas = document.getElementById('pageCanvas');
+    content.innerHTML = page.html;
+    canvas.style.background = page.bgColor || '#1e293b';
+    document.getElementById('pageBgPick').value = page.bgColor || '#1e293b';
+
+    // Restore drawing
+    restoreDrawing(page.drawData);
+
+    // Re-render mermaid diagrams
+    setTimeout(() => {
+        const mermaids = content.querySelectorAll('.mermaid');
+        if (mermaids.length > 0) {
+            mermaids.forEach(m => m.removeAttribute('data-processed'));
+            mermaid.run();
+        }
+        _neReattachFreeImgs();
+        _neResizeCanvas();
+    }, 100);
+
+    renderPageTabs();
+}
+
+function addPage() {
+    saveCurrent();
+    const id = 'p' + Date.now();
+    const pageNum = pages.length + 1;
+    pages.push({ id, title: 'Page ' + pageNum, html: '<p style="color:#475569;font-style:italic;">New page — start typing here...</p>', bgColor: '#1e293b', drawData: null });
+    switchPage(pages.length - 1);
+    // Focus the content area
+    setTimeout(() => {
+        const c = document.getElementById('pageContent');
+        if (c) { c.focus(); }
+    }, 150);
+}
+
+function removePage(idx) {
+    if (pages.length <= 1) return;
+    if (!confirm('Delete this page?')) return;
+
+    // If removing a page other than the active one, save active page first
+    if (idx !== activePageIdx) {
+        saveCurrent();
+    }
+
+    pages.splice(idx, 1);
+
+    // Adjust activePageIdx after splice
+    if (idx < activePageIdx) {
+        activePageIdx--;
+    } else if (activePageIdx >= pages.length) {
+        activePageIdx = pages.length - 1;
+    }
+
+    // Skip saveCurrent inside switchPage — we already handled it above
+    _editorReady = false;
+    switchPage(activePageIdx);
+}
+
+function saveCurrent() {
+    if (pages[activePageIdx]) {
+        pages[activePageIdx].html = document.getElementById('pageContent').innerHTML;
+        pages[activePageIdx].drawData = getDrawData();
+    }
+}
+
+function escH(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ═══════════════════════════════════════
+// EXEC COMMANDS (formatting)
+// ═══════════════════════════════════════
+function execCmd(cmd, value) {
+    document.getElementById('pageContent').focus();
+    if (cmd === 'formatBlock') {
+        document.execCommand('formatBlock', false, '<' + value + '>');
+    } else {
+        document.execCommand(cmd, false, value || null);
+    }
+}
+
+// ═══════════════════════════════════════
+// TEXT COLOR
+// ═══════════════════════════════════════
+function applyTextColor(color) {
+    document.getElementById('pageContent').focus();
+    document.execCommand('foreColor', false, color);
+}
+
+// ═══════════════════════════════════════
+// PAGE BACKGROUND
+// ═══════════════════════════════════════
+function applyPageBg(color) {
+    pages[activePageIdx].bgColor = color;
+    document.getElementById('pageCanvas').style.background = color;
+}
+
+// ═══════════════════════════════════════
+// HIGHLIGHTING
+// ═══════════════════════════════════════
+let currentHighlight = 'hl-yellow';
+
+function toggleHighlightPicker() {
+    document.getElementById('hlDropdown').classList.toggle('show');
+}
+
+function applyHighlight(cls) {
+    currentHighlight = cls;
+    document.getElementById('hlDropdown').classList.remove('show');
+
+    const sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed) return;
+
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = cls;
+    range.surroundContents(span);
+    sel.removeAllRanges();
+}
+
+function removeHighlight() {
+    document.getElementById('hlDropdown').classList.remove('show');
+
+    const sel = window.getSelection();
+    if (!sel.rangeCount || sel.isCollapsed) return;
+
+    const range = sel.getRangeAt(0);
+    // Find parent highlight spans and unwrap
+    const container = range.commonAncestorContainer;
+    const parent = container.nodeType === 3 ? container.parentElement : container;
+    if (parent && parent.className && parent.className.startsWith('hl-')) {
+        const text = document.createTextNode(parent.textContent);
+        parent.parentNode.replaceChild(text, parent);
+    }
+    sel.removeAllRanges();
+}
+
+// Close highlight picker on click outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('#hlBtn') && !e.target.closest('#hlDropdown')) {
+        document.getElementById('hlDropdown').classList.remove('show');
+    }
+});
+
+// ═══════════════════════════════════════
+// INSERT IMAGE
+// ═══════════════════════════════════════
+function insertImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = function () {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const container = document.getElementById('pageContent');
+            if (!container) return;
+            _neCreateFreeImg(container, e.target.result, 40, 40, 300);
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
+
+function _neCreateFreeImg(container, src, x, y, w) {
+    const wrap = document.createElement('div');
+    wrap.className = 'free-img-wrap';
+    wrap.style.left = x + 'px';
+    wrap.style.top = y + 'px';
+    wrap.style.width = (w || 300) + 'px';
+    wrap.contentEditable = 'false';
+    const img = document.createElement('img');
+    img.src = src;
+    img.draggable = false;
+    wrap.appendChild(img);
+    const moveH = document.createElement('div');
+    moveH.className = 'free-img-move';
+    wrap.appendChild(moveH);
+    const resH = document.createElement('div');
+    resH.className = 'free-img-resize';
+    wrap.appendChild(resH);
+    const delB = document.createElement('div');
+    delB.className = 'free-img-del';
+    delB.textContent = '\u2715';
+    delB.title = 'Remove image';
+    delB.addEventListener('click', () => wrap.remove());
+    wrap.appendChild(delB);
+    container.appendChild(wrap);
+    wrap.dataset.attached = '1';
+    _neAttachMove(wrap, moveH, container);
+    _neAttachResize(wrap, resH);
+}
+function _neAttachMove(wrap, handle, container) {
+    let sx, sy, oL, oT;
+    function onDown(e) {
+        e.preventDefault(); e.stopPropagation();
+        sx = e.clientX||e.touches?.[0]?.clientX||0;
+        sy = e.clientY||e.touches?.[0]?.clientY||0;
+        oL = wrap.offsetLeft; oT = wrap.offsetTop;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onUp);
+    }
+    function onMove(e) {
+        e.preventDefault();
+        const cx = e.clientX||e.touches?.[0]?.clientX||0;
+        const cy = e.clientY||e.touches?.[0]?.clientY||0;
+        let nL = oL+(cx-sx), nT = oT+(cy-sy);
+        nL = Math.max(0, Math.min(nL, container.offsetWidth-wrap.offsetWidth));
+        nT = Math.max(0, Math.min(nT, container.offsetHeight-wrap.offsetHeight));
+        wrap.style.left = nL+'px'; wrap.style.top = nT+'px';
+    }
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, {passive:false});
+}
+function _neAttachResize(wrap, handle) {
+    let sx, sw;
+    function onDown(e) {
+        e.preventDefault(); e.stopPropagation();
+        sx = e.clientX||e.touches?.[0]?.clientX||0;
+        sw = wrap.offsetWidth;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        document.addEventListener('touchmove', onMove, {passive:false});
+        document.addEventListener('touchend', onUp);
+    }
+    function onMove(e) {
+        e.preventDefault();
+        const cx = e.clientX||e.touches?.[0]?.clientX||0;
+        wrap.style.width = Math.max(60, sw+(cx-sx))+'px';
+    }
+    function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
+    }
+    handle.addEventListener('mousedown', onDown);
+    handle.addEventListener('touchstart', onDown, {passive:false});
+}
+function _neReattachFreeImgs() {
+    const c = document.getElementById('pageContent');
+    if (!c) return;
+    c.querySelectorAll('.free-img-wrap').forEach(wrap => {
+        if (wrap.dataset.attached) return;
+        wrap.dataset.attached = '1';
+        const moveH = wrap.querySelector('.free-img-move');
+        const resH = wrap.querySelector('.free-img-resize');
+        const delB = wrap.querySelector('.free-img-del');
+        if (moveH) _neAttachMove(wrap, moveH, c);
+        if (resH) _neAttachResize(wrap, resH);
+        if (delB) delB.addEventListener('click', () => wrap.remove());
+    });
+}
+
+// Expand page-canvas so background covers all absolute-positioned children
+function _neResizeCanvas() {
+    const canvas = document.getElementById('pageCanvas');
+    const content = document.getElementById('pageContent');
+    if (!canvas || !content) return;
+    let maxBottom = content.scrollHeight;
+    let maxRight = content.scrollWidth;
+    content.querySelectorAll('.free-img-wrap').forEach(wrap => {
+        const bottom = wrap.offsetTop + wrap.offsetHeight + 40;
+        const right = wrap.offsetLeft + wrap.offsetWidth + 40;
+        if (bottom > maxBottom) maxBottom = bottom;
+        if (right > maxRight) maxRight = right;
+    });
+    canvas.style.minHeight = maxBottom + 'px';
+    canvas.style.minWidth = maxRight + 'px';
+}
+
+// ═══════════════════════════════════════
+// INSERT FLOWCHART
+// ═══════════════════════════════════════
+function showFlowchartPicker() {
+    const flowcharts = window.libraryGetAllItems ? window.libraryGetAllItems('flowchart') : [];
+
+    let itemsHtml = '';
+    if (flowcharts.length === 0) {
+        itemsHtml = '<div class="fc-empty"><p>📊 No flowcharts saved yet.</p><p style="margin-top:8px;font-size:12px;">Generate flowcharts from the Flowcharts page and save them to your Library first.</p></div>';
+    } else {
+        flowcharts.forEach(fc => {
+            const date = new Date(fc.createdAt).toLocaleDateString();
+            itemsHtml += `<div class="fc-item" onclick="insertFlowchart('${fc.id}','${fc.folderId}')">
+                <span class="fc-item-icon">📊</span>
+                <div>
+                    <div class="fc-item-name">${escH(fc.name)}</div>
+                    <div class="fc-item-meta">${fc.folderName} • ${date}</div>
+                </div>
+            </div>`;
+        });
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'fc-modal-overlay';
+    overlay.id = 'fcOverlay';
+    overlay.innerHTML = `<div class="fc-modal">
+        <h3>📊 Insert Flowchart</h3>
+        ${itemsHtml}
+        <div style="text-align:right;margin-top:16px;">
+            <button onclick="document.getElementById('fcOverlay').remove()" style="padding:8px 18px;border-radius:8px;border:none;background:rgba(71,85,105,0.3);color:#94a3b8;cursor:pointer;font-weight:600;">Cancel</button>
+        </div>
+    </div>`;
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+function insertFlowchart(itemId, folderId) {
+    const lib = JSON.parse(localStorage.getItem('liftoffLibrary'));
+    if (!lib) return;
+    const folder = lib.folders.find(f => f.id === folderId);
+    if (!folder) return;
+    const item = folder.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    document.getElementById('fcOverlay')?.remove();
+
+    // Add a new page with the flowchart
+    saveCurrent();
+    const id = 'p' + Date.now();
+    const html = `<div class="inserted-flowchart"><div class="fc-label">📊 ${escH(item.name)}</div><div class="mermaid">${escH(item.content)}</div></div>`;
+    pages.push({ id, title: item.name, html, bgColor: '#1e293b', drawData: null });
+    switchPage(pages.length - 1);
+
+    setTimeout(() => {
+        const mermaids = document.querySelectorAll('.mermaid');
+        mermaids.forEach(m => m.removeAttribute('data-processed'));
+        mermaid.run();
+    }, 200);
+}
+
+// ═══════════════════════════════════════
+// FREE DRAW
+// ═══════════════════════════════════════
+let isDrawMode = false;
+let isDrawing = false;
+let drawColor = '#60a5fa';
+let drawSize = 3;
+let drawBrush = 'pen'; // 'pen' | 'marker' | 'eraser'
+let drawCtx = null;
+let drawStrokes = []; // array of stroke image data for undo
+
+function initDrawCanvas() {
+    const canvas = document.getElementById('drawCanvas');
+    drawCtx = canvas.getContext('2d');
+    resizeDrawCanvas();
+
+    canvas.addEventListener('pointerdown', startDraw);
+    canvas.addEventListener('pointermove', draw);
+    canvas.addEventListener('pointerup', endDraw);
+    canvas.addEventListener('pointerleave', endDraw);
+
+    window.addEventListener('resize', resizeDrawCanvas);
+}
+
+function resizeDrawCanvas() {
+    const canvas = document.getElementById('drawCanvas');
+    const parent = document.getElementById('pageCanvas');
+    const currentData = drawCtx ? canvas.toDataURL() : null;
+
+    const w = parent.offsetWidth;
+    const h = Math.max(parent.offsetHeight, 600);
+    canvas.width = w;
+    canvas.height = h;
+    // Match CSS size to internal resolution for 1:1 pixel mapping
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+
+    if (currentData && drawCtx) {
+        const img = new Image();
+        img.onload = () => drawCtx.drawImage(img, 0, 0);
+        img.src = currentData;
+    }
+}
+
+function toggleDraw() {
+    isDrawMode = !isDrawMode;
+    document.getElementById('drawToggle').classList.toggle('active', isDrawMode);
+    document.getElementById('drawCanvas').classList.toggle('active', isDrawMode);
+    document.getElementById('drawToolbar').classList.toggle('show', isDrawMode);
+    document.getElementById('pageContent').contentEditable = !isDrawMode;
+    if (isDrawMode) resizeDrawCanvas();
+}
+
+function setBrush(type) {
+    drawBrush = type;
+    document.getElementById('brushPen').classList.toggle('active', type === 'pen');
+    document.getElementById('brushMarker').classList.toggle('active', type === 'marker');
+    document.getElementById('brushEraser').classList.toggle('active', type === 'eraser');
+}
+
+function startDraw(e) {
+    isDrawing = true;
+    // Save state for undo
+    drawStrokes.push(document.getElementById('drawCanvas').toDataURL());
+    const pos = getDrawPos(e);
+    drawCtx.beginPath();
+    drawCtx.moveTo(pos.x, pos.y);
+
+    if (drawBrush === 'eraser') {
+        drawCtx.globalCompositeOperation = 'destination-out';
+        drawCtx.lineWidth = drawSize * 4;
+    } else if (drawBrush === 'marker') {
+        drawCtx.globalCompositeOperation = 'source-over';
+        drawCtx.strokeStyle = drawColor;
+        drawCtx.lineWidth = drawSize * 3;
+        drawCtx.globalAlpha = 0.3;
+    } else {
+        drawCtx.globalCompositeOperation = 'source-over';
+        drawCtx.strokeStyle = drawColor;
+        drawCtx.lineWidth = drawSize;
+        drawCtx.globalAlpha = 1;
+    }
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    const pos = getDrawPos(e);
+    drawCtx.lineTo(pos.x, pos.y);
+    drawCtx.stroke();
+}
+
+function endDraw() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    drawCtx.globalAlpha = 1;
+    drawCtx.globalCompositeOperation = 'source-over';
+}
+
+function getDrawPos(e) {
+    const canvas = document.getElementById('drawCanvas');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+function clearDrawing() {
+    if (!confirm('Clear all drawings on this page?')) return;
+    drawStrokes.push(document.getElementById('drawCanvas').toDataURL());
+    drawCtx.clearRect(0, 0, drawCtx.canvas.width, drawCtx.canvas.height);
+}
+
+function undoStroke() {
+    if (drawStrokes.length === 0) return;
+    const prev = drawStrokes.pop();
+    const img = new Image();
+    img.onload = function () {
+        drawCtx.clearRect(0, 0, drawCtx.canvas.width, drawCtx.canvas.height);
+        drawCtx.drawImage(img, 0, 0);
+    };
+    img.src = prev;
+}
+
+function getDrawData() {
+    const canvas = document.getElementById('drawCanvas');
+    if (!drawCtx) return null;
+    // Check if canvas is blank
+    const blank = document.createElement('canvas');
+    blank.width = canvas.width;
+    blank.height = canvas.height;
+    if (canvas.toDataURL() === blank.toDataURL()) return null;
+    return canvas.toDataURL();
+}
+
+function restoreDrawing(data) {
+    const canvas = document.getElementById('drawCanvas');
+    resizeDrawCanvas();
+    drawStrokes = [];
+    if (!data) {
+        if (drawCtx) drawCtx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+    const img = new Image();
+    img.onload = function () {
+        drawCtx.clearRect(0, 0, canvas.width, canvas.height);
+        drawCtx.drawImage(img, 0, 0);
+    };
+    img.src = data;
+}
+
+// ═══════════════════════════════════════
+// SAVE / EXIT
+// ═══════════════════════════════════════
+function saveNote() {
+    saveCurrent();
+
+    // Build combined HTML for preview (all pages) — include draw overlays & clean up controls
+    const pageW = document.getElementById('pageContent')?.offsetWidth || 720;
+    const combinedHtml = pages.map(p => {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = p.html;
+        // Flatten draw data into an <img> overlay
+        if (p.drawData) {
+            const overlay = document.createElement('img');
+            overlay.src = p.drawData;
+            overlay.className = 'saved-draw-overlay';
+            overlay.setAttribute('style', 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:40;');
+            tmp.appendChild(overlay);
+        }
+        // Strip free-img control handles
+        tmp.querySelectorAll('.free-img-move, .free-img-resize, .free-img-del').forEach(el => el.remove());
+        tmp.querySelectorAll('.free-img-wrap').forEach(w => { delete w.dataset.attached; });
+        const h = tmp.scrollHeight || 600;
+        return '<div class=\"saved-notes-wrap\" data-orig-w=\"' + pageW + '\" data-orig-h=\"' + h + '\" style=\"position:relative;width:' + pageW + 'px;min-height:' + h + 'px;margin:0 auto;padding:40px;background:#1e293b;border-radius:12px;\">' + tmp.innerHTML + '</div>';
+    }).join('<hr style="margin:30px 0;border-color:rgba(71,85,105,0.3);">');
+
+    if (noteId && noteFolderId) {
+        // Update existing library item
+        const lib = JSON.parse(localStorage.getItem('liftoffLibrary'));
+        if (lib) {
+            const folder = lib.folders.find(f => f.id === noteFolderId);
+            if (folder) {
+                const item = folder.items.find(i => i.id === noteId);
+                if (item) {
+                    item.content = combinedHtml;
+                    item.editorPages = pages;
+                    item.name = noteName;
+                    localStorage.setItem('liftoffLibrary', JSON.stringify(lib));
+                    showSaveToast('Saved!');
+                    return;
+                }
+            }
+        }
+    }
+
+    // Save as new item — show save modal
+    if (window.libraryShowSaveModal) {
+        window.libraryShowSaveModal('note', combinedHtml, notePdfName, noteName, function (item) {
+            // Also save editorPages to the item
+            const lib = JSON.parse(localStorage.getItem('liftoffLibrary'));
+            if (lib) {
+                for (const f of lib.folders) {
+                    const found = f.items.find(i => i.id === item.id);
+                    if (found) {
+                        found.editorPages = pages;
+                        localStorage.setItem('liftoffLibrary', JSON.stringify(lib));
+                        noteId = item.id;
+                        noteFolderId = f.id;
+                        noteName = item.name;
+                        document.getElementById('noteTitle').textContent = noteName;
+                        break;
+                    }
+                }
+            }
+            showSaveToast('Saved to Library!');
+        });
+    }
+}
+
+function showSaveToast(msg) {
+    const toast = document.createElement('div');
+    toast.textContent = msg;
+    toast.style.cssText = 'position:fixed;bottom:80px;right:30px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;padding:12px 24px;border-radius:10px;font-size:14px;font-weight:600;z-index:999999;animation:fadeIn 0.3s;';
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 2000);
+    setTimeout(() => toast.remove(), 2500);
+}
+
+function exitEditor() {
+    if (confirm('Leave editor? Unsaved changes will be lost.')) {
+        window.location.href = 'library.html';
+    }
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+initEditor();
+</script>
+</body>
+</html>

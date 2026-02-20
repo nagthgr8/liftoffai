@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LiftOff - PDF Chat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #111827;
+    color: #f3f4f6;
+    display: flex;
+    height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background: #1f2937;
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid #374151;
+}
+
+.sidebar h2 {
+    margin-bottom: 30px;
+    font-size: 20px;
+}
+
+.nav-item {
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.nav-item:hover {
+    background: #374151;
+}
+
+.nav-item.active {
+    background: #3b82f6;
+}
+
+/* Main content */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background: #1f2937;
+    padding: 20px 30px;
+    border-bottom: 1px solid #374151;
+}
+
+.header h1 {
+    font-size: 24px;
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* PDF Selector Panel */
+.pdf-panel {
+    width: 250px;
+    background: #1f2937;
+    padding: 20px;
+    border-right: 1px solid #374151;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.pdf-panel h3 {
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: #9ca3af;
+    text-transform: uppercase;
+}
+
+.upload-section {
+    margin-bottom: 20px;
+}
+
+.upload-btn {
+    width: 100%;
+    padding: 10px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.upload-btn:hover {
+    background: #2563eb;
+}
+
+#pdfInput {
+    display: none;
+}
+
+.pdf-list {
+    flex: 1;
+}
+
+.pdf-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.pdf-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.pdf-item.selected {
+    background: #3b82f6;
+    border-left-color: #60a5fa;
+}
+
+.pdf-item-name {
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.empty-state {
+    color: #6b7280;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 10px;
+}
+
+/* Chat Area */
+.chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 30px;
+}
+
+.chat-container {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    padding-right: 10px;
+}
+
+.message {
+    margin-bottom: 20px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message.user {
+    text-align: right;
+}
+
+.message-bubble {
+    display: inline-block;
+    max-width: 70%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    word-wrap: break-word;
+}
+
+.message.user .message-bubble {
+    background: #3b82f6;
+    color: white;
+}
+
+.message.ai .message-bubble {
+    background: rgba(255,255,255,0.1);
+    color: #f3f4f6;
+    border-left: 3px solid #3b82f6;
+}
+
+.message-time {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.loading {
+    text-align: center;
+    color: #9ca3af;
+    padding: 20px;
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
+    border-radius: 50%;
+    border-top-color: #3b82f6;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Input Area */
+.input-area {
+    display: flex;
+    gap: 10px;
+}
+
+.input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,0.05);
+    border-radius: 8px;
+    padding: 10px 15px;
+    border: 1px solid #374151;
+    transition: border-color 0.2s;
+}
+
+.input-wrapper:focus-within {
+    border-color: #3b82f6;
+}
+
+#questionInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #f3f4f6;
+    outline: none;
+    font-size: 14px;
+}
+
+#questionInput::placeholder {
+    color: #6b7280;
+}
+
+.send-btn {
+    padding: 10px 20px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.send-btn:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.send-btn:disabled {
+    background: #6b7280;
+    cursor: not-allowed;
+}
+
+/* Info Box */
+.info-box {
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 3px solid #3b82f6;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #e0e7ff;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .pdf-panel {
+        width: 180px;
+    }
+    
+    .message-bubble {
+        max-width: 85%;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2>LiftOff</h2>
+    <div class="nav-item active">📚 PDF Chat</div>
+    <div class="nav-item">🏠 Home</div>
+    <div class="nav-item">📝 MCQs</div>
+    <div class="nav-item">📘 Flashcards</div>
+    <div class="nav-item">🧠 Tests</div>
+</div>
+
+<div class="main">
+    <div class="header">
+        <h1>📄 Learn from PDFs with AI</h1>
+    </div>
+    
+    <div class="content">
+        <!-- PDF Selector -->
+        <div class="pdf-panel">
+            <h3>📚 Your Materials</h3>
+            
+            <div class="upload-section">
+                <button class="upload-btn" onclick="document.getElementById('pdfInput').click()">
+                    + Upload PDF
+                </button>
+                <input type="file" id="pdfInput" accept=".pdf" multiple>
+            </div>
+            
+            <div class="pdf-list" id="pdfList">
+                <div class="empty-state">No PDFs uploaded yet</div>
+            </div>
+        </div>
+        
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div id="serverWarning" style="display: none; background: #dc2626; padding: 15px; border-radius: 6px; margin-bottom: 20px; color: white;">
+                <strong>⚠️ Backend is not running!</strong>
+                <p style="margin: 10px 0 0; font-size: 13px;">
+                    Start the Flask server first:
+                    <code style="background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 4px; display: block; margin-top: 8px;">python app.py</code>
+                </p>
+            </div>
+            
+            <div class="info-box" id="infoBox" style="display: none;">
+                <strong id="selectedPdfName"></strong> loaded. Ask me anything about this PDF!
+            </div>
+            
+            <div class="chat-container" id="chatContainer">
+                <div class="message ai">
+                    <div class="message-bubble">
+                        👋 Welcome! Upload a PDF from the left panel and I'll help you learn from it. You can ask any questions about the content!
+                    </div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-wrapper">
+                    <input type="text" id="questionInput" placeholder="Ask a question about the PDF..." 
+                           disabled>
+                </div>
+                <button class="send-btn" id="sendBtn" onclick="sendQuestion()" disabled>
+                    Send
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_BASE = "http://localhost:5000/api";
+let selectedPdf = null;
+let serverRunning = false;
+
+// Check if server is running
+async function checkServerStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/health`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(2000)
+        });
+        if (response.ok) {
+            serverRunning = true;
+            document.getElementById('serverWarning').style.display = 'none';
+            return true;
+        }
+    } catch (error) {
+        serverRunning = false;
+        document.getElementById('serverWarning').style.display = 'block';
+        return false;
+    }
+}
+
+// ============================================================================
+// PDF UPLOAD
+// ============================================================================
+
+document.getElementById('pdfInput').addEventListener('change', async (e) => {
+    const files = e.target.files;
+    
+    // Check server before uploading
+    if (!serverRunning) {
+        await checkServerStatus();
+    }
+    
+    if (!serverRunning) {
+        addMessage('ai', `❌ Can't upload: Backend server is not running! Start it with: python app.py`);
+        return;
+    }
+    
+    for (let file of files) {
+        const formData = new FormData();
+        formData.append('pdf', file);
+        formData.append('pdf_name', file.name);
+        
+        try {
+            // Show uploading state
+            addMessage('ai', `📤 Uploading ${file.name}...`);
+            
+            const response = await fetch(`${API_BASE}/upload-pdf`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                addMessage('ai', `✅ ${file.name} uploaded successfully!`);
+                await loadPdfList();
+                // Auto-select the first PDF or the one that was just uploaded
+                setTimeout(() => {
+                    selectPdf(file.name);
+                }, 300);
+            } else {
+                addMessage('ai', `❌ Error uploading ${file.name}: ${data.error}`);
+            }
+        } catch (error) {
+            addMessage('ai', `❌ Upload failed: ${error.message}`);
+        }
+    }
+});
+
+// ============================================================================
+// PDF LIST MANAGEMENT
+// ============================================================================
+
+async function loadPdfList() {
+    try {
+        const response = await fetch(`${API_BASE}/list-pdfs`);
+        const data = await response.json();
+        
+        const pdfList = document.getElementById('pdfList');
+        
+        if (data.pdfs.length === 0) {
+            pdfList.innerHTML = '<div class="empty-state">No PDFs uploaded yet</div>';
+            return;
+        }
+        
+        pdfList.innerHTML = data.pdfs.map(pdf => `
+            <div class="pdf-item ${selectedPdf === pdf ? 'selected' : ''}" 
+                 onclick="selectPdf('${pdf}')">
+                <div class="pdf-item-name">📄 ${pdf}</div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading PDFs:', error);
+        serverRunning = false;
+    }
+}
+
+function selectPdf(pdfName) {
+    selectedPdf = pdfName;
+    loadPdfList();
+    
+    document.getElementById('infoBox').style.display = 'block';
+    document.getElementById('selectedPdfName').innerText = pdfName;
+    
+    document.getElementById('questionInput').disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+    
+    addMessage('ai', `📖 Now chatting about "${pdfName}". Ask me anything!`);
+}
+
+// ============================================================================
+// CHAT FUNCTIONALITY
+// ============================================================================
+
+async function sendQuestion() {
+    const question = document.getElementById('questionInput').value.trim();
+    
+    if (!question || !selectedPdf) {
+        alert('Please select a PDF first');
+        return;
+    }
+    
+    // Check server before sending
+    if (!serverRunning) {
+        await checkServerStatus();
+    }
+    
+    if (!serverRunning) {
+        addMessage('ai', `❌ Backend server is not running! Start it with: python app.py`);
+        return;
+    }
+    
+    // Disable input while processing
+    document.getElementById('questionInput').disabled = true;
+    document.getElementById('sendBtn').disabled = true;
+    
+    // Add user message
+    addMessage('user', question);
+    document.getElementById('questionInput').value = '';
+    
+    // Show loading
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'message ai';
+    loadingDiv.id = 'loading-' + Date.now();
+    loadingDiv.innerHTML = '<div class="message-bubble"><div class="spinner"></div> Thinking...</div>';
+    document.getElementById('chatContainer').appendChild(loadingDiv);
+    document.getElementById('chatContainer').scrollTop = document.getElementById('chatContainer').scrollHeight;
+    
+    try {
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pdf_name: selectedPdf,
+                question: question
+            })
+        });
+        
+        const data = await response.json();
+        
+        // Remove loading message
+        loadingDiv.remove();
+        
+        if (response.ok) {
+            addMessage('ai', data.answer);
+        } else {
+            addMessage('ai', `❌ Error: ${data.error || 'Unknown error occurred'}`);
+        }
+    } catch (error) {
+        console.error('Chat error:', error);
+        loadingDiv.remove();
+        addMessage('ai', `❌ Error: ${error.message}. Make sure the backend server is running!`);
+    } finally {
+        // Re-enable input
+        document.getElementById('questionInput').disabled = false;
+        document.getElementById('sendBtn').disabled = false;
+        document.getElementById('questionInput').focus();
+    }
+}
+
+function addMessage(role, content) {
+    const chatContainer = document.getElementById('chatContainer');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}`;
+    messageDiv.id = `msg-${Date.now()}`;
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    bubble.innerHTML = content;
+    
+    const time = document.createElement('div');
+    time.className = 'message-time';
+    time.innerText = new Date().toLocaleTimeString();
+    
+    messageDiv.appendChild(bubble);
+    messageDiv.appendChild(time);
+    
+    chatContainer.appendChild(messageDiv);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+    
+    return messageDiv.id;
+}
+
+// Enable sending with Enter key
+document.getElementById('questionInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+    }
+});
+
+// Load PDFs on page load and check server status
+window.addEventListener('load', async () => {
+    await checkServerStatus();
+    loadPdfList();
+});
+</script>
+
+</body>
+</html>

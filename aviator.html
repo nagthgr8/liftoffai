@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LiftOff - Aviator AI Tutor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="theme.js"></script>
+<script src="settings.js"></script>
+<script src="audio.js"></script>
+<script src="subscription.js"></script>
+<script src="library-save.js"></script>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #f1f5f9;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    background: rgba(15, 23, 42, 0.8);
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.sidebar h2 {
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+}
+
+.logo-emoji {
+    font-size: 36px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.nav-item {
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.nav-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+    transform: translateX(5px);
+}
+
+.nav-item.active {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+/* Main Container */
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.8));
+    padding: 20px 30px;
+    border-bottom: 1px solid rgba(71, 85, 105, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #34d399);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0;
+}
+
+.header p {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 5px;
+}
+
+/* Chat Container */
+.chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 20px;
+}
+
+.messages-area {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(30, 41, 59, 0.3);
+    border-radius: 12px;
+    border: 1px solid rgba(71, 85, 105, 0.2);
+}
+
+.messages-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages-area::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 3px;
+}
+
+.message {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.message.user {
+    justify-content: flex-end;
+}
+
+.message-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.message.ai .message-avatar {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+}
+
+.message.user .message-avatar {
+    background: rgba(71, 85, 105, 0.5);
+}
+
+.message-bubble {
+    max-width: 70%;
+    padding: 10px 15px;
+    border-radius: 12px;
+    word-wrap: break-word;
+    line-height: 1.4;
+}
+
+.message.ai .message-bubble {
+    background: rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #cbd5e1;
+}
+
+.message.user .message-bubble {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    color: white;
+}
+
+/* Input Area */
+.input-area {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+#chatInput {
+    flex: 1;
+    background: rgba(71, 85, 105, 0.2);
+    border: 1px solid rgba(71, 85, 105, 0.4);
+    border-radius: 8px;
+    padding: 12px 15px;
+    color: #f1f5f9;
+    font-size: 14px;
+    resize: none;
+    max-height: 100px;
+    font-family: inherit;
+    transition: all 0.2s;
+}
+
+#chatInput:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.7);
+    background: rgba(71, 85, 105, 0.3);
+}
+
+#chatInput::placeholder {
+    color: #64748b;
+}
+
+.send-btn {
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.send-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+}
+
+.send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Loading spinner */
+.loading-message {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(96, 165, 250, 0.3);
+    border-top: 2px solid #60a5fa;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Info panel */
+.info-panel {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #97a3b8;
+}
+
+.info-panel h4 {
+    color: #60a5fa;
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.info-stat {
+    display: inline-block;
+    margin-right: 20px;
+    margin-bottom: 5px;
+}
+
+.info-stat span:first-child {
+    color: #cbd5e1;
+    font-weight: 600;
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+    <h2><span class="logo-emoji">✈️</span>LiftOff</h2>
+    <div class="nav-item" onclick="window.location.href='dashboard.html'">🏠 Home</div>
+    <div class="nav-item" onclick="window.location.href='pdf-to-notes.html'">📝 PDF to Notes</div>
+    <div class="nav-item" onclick="window.location.href='tests.html'">🧪 Tests</div>
+    <div class="nav-item" onclick="window.location.href='flowchart.html'">📊 Flowcharts</div>
+    <div class="nav-item" onclick="window.location.href='flashcards.html'">🃏 Flashcards</div>
+    <div class="nav-item active">🤖 Aviator</div>
+    <div class="nav-item" onclick="window.location.href='library.html'">📁 Library</div></div>
+
+<div class="main">
+    <div class="header">
+        <h1>🤖 Aviator - Your AI Tutor</h1>
+        <p>Ask me anything about your learning journey. I have access to your test history and learning progress!</p>
+    </div>
+
+    <div class="chat-container">
+        <div class="info-panel" id="infoPanel">
+            <h4>📊 Your Learning Stats</h4>
+            <div id="statsContent">Loading your stats...</div>
+        </div>
+
+        <div class="messages-area" id="messagesArea">
+            <div class="message ai">
+                <div class="message-avatar">🤖</div>
+                <div class="message-bubble">
+                    Hi! I'm Aviator, your AI tutor! I have access to your test history and learning progress. Feel free to ask me anything about your learning journey, doubts about specific topics, or tips to improve! What would you like to know? 📚
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <textarea id="chatInput" placeholder="Ask me anything..." rows="1"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const API_BASE = 'http://localhost:5000/api';
+
+// Get user from localStorage
+const user = JSON.parse(localStorage.getItem('liftoffUser'));
+if (!user) {
+    window.location.href = 'login.html';
+}
+
+// Load user stats on page load
+window.addEventListener('load', () => {
+    loadUserStats();
+});
+
+// Auto-resize textarea
+document.getElementById('chatInput').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+
+// Send on Enter
+document.getElementById('chatInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// Load and display user stats
+async function loadUserStats() {
+    try {
+        const response = await fetch(`${API_BASE}/get-test-history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user.username })
+        });
+
+        const data = await response.json();
+        const history = data.history || [];
+
+        let statsHtml = '';
+        if (history.length === 0) {
+            statsHtml = '<p style="color: #94a3b8;">No tests taken yet. Complete your first test to build your learning profile!</p>';
+        } else {
+            const totalTests = history.length;
+            const avgScore = (history.reduce((sum, t) => sum + t.percentage, 0) / totalTests).toFixed(1);
+            const bestScore = Math.max(...history.map(t => t.percentage));
+            const totalQuestions = history.reduce((sum, t) => sum + t.totalQuestions, 0);
+
+            statsHtml = `
+                <div class="info-stat"><span>${totalTests}</span> tests completed</div>
+                <div class="info-stat"><span>${avgScore}%</span> average score</div>
+                <div class="info-stat"><span>${bestScore}%</span> best score</div>
+                <div class="info-stat"><span>${totalQuestions}</span> questions answered</div>
+            `;
+        }
+
+        document.getElementById('statsContent').innerHTML = statsHtml;
+    } catch (err) {
+        console.log("Could not load stats", err);
+    }
+}
+
+// Add message to chat
+function addMessage(text, isUser = false) {
+    const messagesArea = document.getElementById('messagesArea');
+    const message = document.createElement('div');
+    message.className = `message ${isUser ? 'user' : 'ai'}`;
+    
+    if (isUser) {
+        message.innerHTML = `
+            <div class="message-bubble">${escapeHtml(text)}</div>
+            <div class="message-avatar">👤</div>
+        `;
+    } else {
+        message.innerHTML = `
+            <div class="message-avatar">🤖</div>
+            <div class="message-bubble">${text}</div>
+        `;
+        if (window.playSound) window.playSound('aviatormessage');
+    }
+    
+    messagesArea.appendChild(message);
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+// Send message
+// Track chat history for context
+let chatHistory = [];
+
+// Load chat history from localStorage on page load
+function loadChatHistory() {
+    const saved = localStorage.getItem('aviatorChatHistory');
+    if (saved) {
+        try {
+            chatHistory = JSON.parse(saved);
+            console.log('Loaded chat history from storage:', chatHistory);
+        } catch (e) {
+            console.error('Failed to parse saved chat history:', e);
+            chatHistory = [];
+        }
+    } else {
+        chatHistory = [];
+        console.log('No saved chat history found, starting fresh');
+    }
+}
+
+// Save chat history to localStorage
+function saveChatHistory() {
+    localStorage.setItem('aviatorChatHistory', JSON.stringify(chatHistory));
+    console.log('Saved chat history to storage:', chatHistory);
+}
+
+// Load history immediately when script loads
+loadChatHistory();
+
+// Also load history when page is ready (for late-loading scripts)
+document.addEventListener('DOMContentLoaded', loadChatHistory);
+
+async function sendMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+
+    console.log('>>> BEFORE adding user message, chatHistory:', chatHistory);
+    
+    addMessage(message, true);
+    
+    // Add user message to chat history
+    chatHistory.push({
+        "role": "user",
+        "content": message
+    });
+    saveChatHistory();
+    
+    console.log('>>> AFTER adding user message, chatHistory:', chatHistory);
+    
+    input.value = '';
+    input.style.height = 'auto';
+
+    const sendBtn = document.getElementById('sendBtn');
+    sendBtn.disabled = true;
+
+    // Show loading message
+    const loadingId = Date.now();
+    addMessage('<div class="loading-message"><span>Aviator is thinking</span><div class="spinner"></div></div>', false);
+
+    try {
+        const historyToSend = chatHistory.slice(0, -1);
+        console.log('>>> SENDING history (excluding current message):', historyToSend);
+        
+        const payload = {
+            username: user.username,
+            question: message,
+            history: historyToSend
+        };
+        console.log('Sending to Aviator with payload:', payload);
+        
+        const response = await fetch(`${API_BASE}/aviator-chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        console.log('>>> Received response:', data);
+
+        // Remove loading message
+        const messagesArea = document.getElementById('messagesArea');
+        messagesArea.removeChild(messagesArea.lastChild);
+
+        if (response.ok) {
+            const assistantResponse = data.answer || data.response;
+            addMessage(assistantResponse, false);
+            
+            // Add assistant response to chat history
+            chatHistory.push({
+                "role": "assistant",
+                "content": assistantResponse
+            });
+            saveChatHistory();
+            
+            console.log('>>> AFTER adding assistant response, chatHistory:', chatHistory);
+        } else {
+            addMessage(`❌ ${data.error}`, false);
+        }
+    } catch (error) {
+        // Remove loading message
+        const messagesArea = document.getElementById('messagesArea');
+        if (messagesArea.lastChild) {
+            messagesArea.removeChild(messagesArea.lastChild);
+        }
+        addMessage(`❌ Error: ${error.message}`, false);
+    } finally {
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>LiftOff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #111827;
+    color: #f3f4f6;
+}
+
+/* Floating dots */
+.dot {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: #9ca3af;
+    border-radius: 50%;
+    opacity: 0.6;
+    animation: float linear infinite;
+}
+
+@keyframes float {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-200vh); }
+}
+
+
+
+/* Center login box */
+.container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 10;
+}
+
+h1 {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+p {
+    color: #9ca3af;
+    margin-bottom: 30px;
+}
+
+button {
+    padding: 14px 28px;
+    margin: 8px;
+    border-radius: 8px;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    width: 220px;
+}
+
+.primary {
+    background-color: #f3f4f6;
+    color: #111827;
+}
+
+.secondary {
+    background: transparent;
+    border: 1px solid #9ca3af;
+    color: #f3f4f6;
+}
+
+</style>
+</head>
+
+<body>
+
+<script>
+for(let i=0;i<100;i++){
+    let dot=document.createElement("div");
+    dot.className="dot";
+    dot.style.left=Math.random()*100+"vw";
+    dot.style.top = Math.random()*200+"vh";
+    dot.style.animationDuration=(20+Math.random()*15)+"s";
+    document.body.appendChild(dot);
+}
+</script>
+
+<div class="container">
+    <h1>LiftOff</h1>
+    <p>Master topics. Earn your landing.</p>
+    <button class="primary" onclick="window.location.href='signup.html'">
+Try LiftOff Free
+</button>
+    <button class="secondary" onclick="window.location.href='login.html'">
+Login
+</button>
+
+    
+</div>
+
+</body>
+</html>

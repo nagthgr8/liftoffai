@@ -5,6 +5,8 @@ import io
 import base64
 from dotenv import load_dotenv
 from openai import OpenAI
+from google.oauth2 import id_token
+from google.auth.transport import requests as grequests
 import PyPDF2
 import pdfplumber
 import fitz  # PyMuPDF for image extraction
@@ -152,22 +154,6 @@ def require_subscription(feature):
 # ============================================================================
 # HTML FILE SERVING (with proper UTF-8 encoding)
 # ============================================================================
-app.route('/verify_token', methods=['POST'])
-def verify_token():
-    data = request.json
-    token = data.get("id_token")
-    if not token:
-        return jsonify({"success": False, "error": "No token provided"}), 400
-    try:
-        # Verify token with Google
-        idinfo = id_token.verify_oauth2_token(token, grequests.Request(), GOOGLE_CLIENT_ID)
-        # idinfo now contains info about the user
-        # e.g., idinfo['email'], idinfo['name'], idinfo['sub']
-        return jsonify({"success": True, "email": idinfo.get("email")})
-    except ValueError as e:
-        # invalid token
-        return jsonify({"success": False, "error": str(e)}), 400
-    
 @app.route('/')
 @app.route('/dashboard')
 @app.route('/dashboard.html')
@@ -1819,6 +1805,22 @@ def generate_term_definition(term, context):
         return response.choices[0].message.content.strip()
     except:
         return f"Definition of {term} not available"
+
+@app.route('/api/verify_token', methods=['POST'])
+def verify_token():
+    data = request.json
+    token = data.get("id_token")
+    if not token:
+        return jsonify({"success": False, "error": "No token provided"}), 400
+    try:
+        # Verify token with Google
+        idinfo = id_token.verify_oauth2_token(token, grequests.Request(), os.getenv("GOOGLE_CLIENT_ID"))
+        # idinfo now contains info about the user
+        # e.g., idinfo['email'], idinfo['name'], idinfo['sub']
+        return jsonify({"success": True, "email": idinfo.get("email")})
+    except ValueError as e:
+        # invalid token
+        return jsonify({"success": False, "error": str(e)}), 400
 
 # ============================================================================
 # RUN SERVER

@@ -4,7 +4,6 @@
 <title>Login - LiftOff</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-
 body {
     margin: 0;
     overflow: hidden;
@@ -12,8 +11,6 @@ body {
     background-color: #111827;
     color: #f3f4f6;
 }
-
-/* Floating dots */
 .dot {
     position: absolute;
     width: 3px;
@@ -23,12 +20,10 @@ body {
     opacity: 0.6;
     animation: float linear infinite;
 }
-
 @keyframes float {
     0% { transform: translateY(0); }
     100% { transform: translateY(-200vh); }
 }
-
 .card {
     position: absolute;
     top: 50%;
@@ -41,7 +36,6 @@ body {
     width: 320px;
     text-align: center;
 }
-
 input {
     width: 100%;
     padding: 12px;
@@ -52,7 +46,6 @@ input {
     color: #f3f4f6;
     box-sizing: border-box;
 }
-
 button {
     width: 100%;
     padding: 12px;
@@ -63,7 +56,6 @@ button {
     color: #111827;
     cursor: pointer;
 }
-
 .small {
     font-size: 13px;
     margin-top: 15px;
@@ -71,18 +63,18 @@ button {
     cursor: pointer;
     text-align: center;
     width: 100%;
-
 }
 .small:hover {
     text-decoration: underline;
 }
-
 </style>
 </head>
 
 <body>
 
 <script>
+    const API_BASE = 'http://localhost:5000/api';
+// floating dots
 for(let i=0;i<120;i++){
     let dot=document.createElement("div");
     dot.className="dot";
@@ -91,6 +83,8 @@ for(let i=0;i<120;i++){
     dot.style.animationDuration=(20+Math.random()*15)+"s";
     document.body.appendChild(dot);
 }
+
+// --- Local login function ---
 function loginUser() {
     const input = document.getElementById("loginInput");
     const password = document.getElementById("loginPassword");
@@ -114,7 +108,48 @@ function loginUser() {
     }
 }
 
+// --- Google One Tap / FedCM integration ---
+function handleCredentialResponse(response) {
+    // send ID token to backend for verification
+    fetch(`${API_BASE}/verify_token`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({id_token: response.credential})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // store user info locally for dashboard access
+            localStorage.setItem('liftoffUser', JSON.stringify({
+                email: data.email,
+                token: response.credential, // optional, in case you need it
+                timestamp: Date.now()       // optional, can use for expiry
+            }));
+
+            // auto redirect if token valid
+            window.location.href = "/dashboard.html"; // make sure the file name matches
+        } else {
+            console.warn("Invalid token");
+        }
+    })
+    .catch(err => console.error("Error verifying token:", err));
+}
+
+
+// initialize Google One Tap
+window.onload = function() {
+    google.accounts.id.initialize({
+        client_id: '584317388297-coc5rmpfdls901ptlvm1rq7f9aselli7.apps.googleusercontent.com', 
+        callback: handleCredentialResponse,
+        auto_select: true,  // silent login if token exists
+        cancel_on_tap_outside: false
+    });
+    google.accounts.id.prompt(); // shows prompt only if no token exists
+}
 </script>
+
+<!-- Load Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <div class="card">
     <h2>Login</h2>

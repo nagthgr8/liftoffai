@@ -21,10 +21,19 @@ from firebase_admin import credentials, firestore, storage, auth
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-cred = credentials.Certificate(os.path.join(BASE_DIR, 'serviceAccountKey.json'))
-firebase_admin.initialize_app(cred, {
-    'storageBucket': 'liftoff.appspot.com'
-})
+service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+if not service_account_json:
+    raise ValueError("Environment variable FIREBASE_SERVICE_ACCOUNT_JSON not set")
+
+# Parse JSON string into a dict
+cred_dict = json.loads(service_account_json)
+
+# Initialize Firebase Admin with Cloud Storage bucket
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(
+        credentials.Certificate(cred_dict),
+        {'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', 'liftoff.appspot.com')}
+    )
 
 db = firestore.client()
 

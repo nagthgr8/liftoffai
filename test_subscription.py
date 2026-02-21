@@ -7,7 +7,7 @@ Tests that the subscription limits are properly enforced
 import requests
 import json
 
-API_BASE = "http://localhost:5000/api"
+API_BASE = "/api"
 
 def test_subscription_limits():
     """Test subscription tier limits"""

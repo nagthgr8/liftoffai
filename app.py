@@ -1,3 +1,5 @@
+import requests
+import json
 from flask import Flask, request, jsonify, send_from_directory, make_response, Response
 from flask_cors import CORS
 import os
@@ -10,18 +12,21 @@ from google.auth.transport import requests as grequests
 import PyPDF2
 import pdfplumber
 import fitz  # PyMuPDF for image extraction
-import json
-import requests
 import urllib.parse
-from datetime import datetime, date
+from datetime import datetime, date, time
 import re
 from functools import wraps
 import firebase_admin
 from firebase_admin import credentials, firestore, storage, auth
+from google.oauth2 import id_token
+
 # Load environment variables
 load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+
+# Debug: Print first 200 chars of the env var to verify content
+print("[DEBUG] FIREBASE_SERVICE_ACCOUNT_JSON (first 200 chars):", (service_account_json or '')[:200])
 
 if not service_account_json:
     raise ValueError("Environment variable FIREBASE_SERVICE_ACCOUNT_JSON not set")
@@ -35,9 +40,8 @@ if not firebase_admin._apps:
         credentials.Certificate(cred_dict),
         {'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', 'liftoff.appspot.com')}
     )
-
+print("[DEBUG] Using Firebase Storage bucket:", os.environ.get('FIREBASE_STORAGE_BUCKET'))
 db = firestore.client()
-
 bucket = storage.bucket()
 
 app = Flask(__name__)
@@ -176,10 +180,8 @@ def require_subscription(feature):
 @app.route('/dashboard')
 @app.route('/dashboard.html')
 def serve_dashboard():
-    return serve_html('dashboard.html')
-
-@app.route('/dashboard.html')
-def serve_dashboard_explicit():
+    print("BASE_DIR:", BASE_DIR)
+    print("Looking for:", os.path.join(BASE_DIR, 'dashboard.html'))    
     return serve_html('dashboard.html')
 
 @app.route('/flowchart.html')
@@ -243,9 +245,6 @@ def serve_static(filename):
         return response
     return jsonify({"error": f"{filename} not found"}), 404
 
-# Store uploaded PDFs content in memory (for development)
-pdf_store = {}
-
 # Data directory for user files
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 if not os.path.exists(DATA_DIR):
@@ -288,25 +287,31 @@ def check_pdf_quality(text, min_words=30, min_word_ratio=0.4):
     return True, "OK"
 
 def get_current_user_id():
-    auth_header = request.headers.get('Authorization')
+    auth_header = request.headers.get("Authorization")
     if not auth_header:
         return None
-    id_token = auth_header.split('Bearer ')[-1]
+
+    token = auth_header.split("Bearer ")[-1]
+
     try:
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        return uid
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            grequests.Request(),
+            os.getenv("GOOGLE_CLIENT_ID") 
+        )
+
+        return idinfo["sub"]
+
     except Exception as e:
-        print('Token verification failed:', e)
+        print("Token verification failed:", e)
         return None
-# ============================================================================
+#=========================================================
 # PDF MANAGEMENT ROUTES
 # ============================================================================
-
 @app.route('/api/upload-pdf', methods=['POST'])
 def upload_pdf():
     user_id = get_current_user_id()
-
+    print("Upload PDF request from user:", user_id)
     if 'pdf' not in request.files:
         return jsonify({"error": "No PDF file provided"}), 400
     
@@ -355,12 +360,137 @@ def upload_pdf():
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/generate-notes', methods=['POST'])
+@require_subscription('note_generations')
+def generate_notes():
+    data = request.json
+    pdf_name = data.get('pdf_name')
+    level = data.get('level', 'beginner')
+    user_id = get_current_user_id()
+
+    if not pdf_name:
+        return jsonify({"error": "Missing pdf_name"}), 400
+    print("USER:", user_id)
+    print("PDF:", pdf_name)
+    try:
+        # 🔥 Fetch from Firestore
+        pdf_ref = db.collection('users').document(user_id).collection('pdfs').document(pdf_name)
+        pdf_doc = pdf_ref.get()
+
+        if not pdf_doc.exists:
+            return jsonify({"error": f"PDF '{pdf_name}' not found"}), 404
+
+        pdf_data = pdf_doc.to_dict()
+        pdf_content = pdf_data.get("pdfText", "")
+        images = pdf_data.get("images", [])
+
+        # ── Quality check ──
+        is_ok, reason = check_pdf_quality(pdf_content)
+        if not is_ok:
+            return jsonify({"error": reason}), 400
+
+        num_images = len(images)
+        content_length = len(pdf_content)
+
+        # Split content into chunks
+        CHUNK_SIZE = 4000
+        chunks = [pdf_content[i:i + CHUNK_SIZE] for i in range(0, content_length, CHUNK_SIZE)]
+
+        if len(chunks) > 15:
+            step = len(chunks) / 15
+            chunks = [chunks[int(i * step)] for i in range(15)]
+
+        num_chunks = len(chunks)
+        print(f"📄 PDF has {content_length} chars, split into {num_chunks} chunks")
+
+        def get_images_for_chunk(chunk_idx, total_chunks, total_images):
+            if total_images == 0:
+                return []
+            images_per_chunk = total_images / total_chunks
+            start_img = int(chunk_idx * images_per_chunk)
+            end_img = int((chunk_idx + 1) * images_per_chunk)
+            return list(range(start_img, min(end_img, total_images)))
+
+        # -------- PROMPTS (unchanged) ----------
+        level_instructions = {
+            "beginner": "Create SIMPLE and EASY-TO-UNDERSTAND notes.",
+            "intermediate": "Create DETAILED and COMPREHENSIVE notes.",
+            "advanced": "Create DEEP and ANALYTICAL notes."
+        }
+
+        system_prompt = f"You are an expert educational note-taking assistant.\n{level_instructions.get(level)}"
+
+        # Generate notes
+        all_notes = []
+        for chunk_idx, chunk_text in enumerate(chunks):
+            chunk_images = get_images_for_chunk(chunk_idx, num_chunks, num_images)
+
+            img_instruction = ""
+            if chunk_images:
+                img_refs = ", ".join([f"[PDF_IMG:{i}]" for i in chunk_images])
+                img_instruction = f"\nUse images: {img_refs}"
+
+            chunk_message = f"""
+Write detailed study notes ({level} level).
+Section {chunk_idx+1}/{num_chunks}.
+{img_instruction}
+
+CONTENT:
+{chunk_text}
+"""
+
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": chunk_message}
+                ],
+                temperature=0.7,
+                max_tokens=4096
+            )
+
+            all_notes.append(response.choices[0].message.content)
+
+        notes = "\n\n".join(all_notes)
+
+        # 🔥 Save notes back to Firestore
+        pdf_ref.update({
+            "notes": notes,
+            "notes_level": level,
+            "notesGeneratedAt": firestore.SERVER_TIMESTAMP
+        })
+
+        return jsonify({
+            "success": True,
+            "notes": notes,
+            "pdf_name": pdf_name,
+            "level": level
+        }), 200
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Server error: {str(e)}"}), 500
     
 @app.route('/api/list-pdfs', methods=['GET'])
 def list_pdfs():
-    """List all uploaded PDFs"""
-    pdfs = list(pdf_store.keys())
-    return jsonify({"pdfs": pdfs}), 200
+    """List all uploaded PDFs for the current user"""
+    try:
+        user_id = get_current_user_id()
+
+        pdfs_ref = db.collection('users').document(user_id).collection('pdfs')
+        docs = pdfs_ref.stream()
+
+        pdf_names = [doc.id for doc in docs]
+
+        return jsonify({"pdfs": pdf_names}), 200
+
+    except Exception as e:
+        print(f"List PDFs error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 def extract_pdf_images(file_bytes):
@@ -410,275 +540,135 @@ def extract_pdf_images(file_bytes):
     return images
 
 
+
 @app.route('/api/pdf-image/<pdf_name>/<int:image_index>')
 def serve_pdf_image(pdf_name, image_index):
-    """Serve an extracted image from a PDF"""
-    if pdf_name not in pdf_store:
-        return jsonify({"error": "PDF not found"}), 404
-    
-    images = pdf_store[pdf_name].get("images", [])
-    if image_index < 0 or image_index >= len(images):
-        return jsonify({"error": "Image index out of range"}), 404
-    
-    img = images[image_index]
-    image_data = base64.b64decode(img["data"])
-    
-    # Determine content type
-    ext_to_mime = {
-        "png": "image/png",
-        "jpg": "image/jpeg",
-        "jpeg": "image/jpeg",
-        "gif": "image/gif",
-        "bmp": "image/bmp",
-        "tiff": "image/tiff",
-        "webp": "image/webp"
-    }
-    mime_type = ext_to_mime.get(img["ext"].lower(), "image/png")
-    
-    return Response(image_data, mimetype=mime_type)
+    """Serve an extracted image from a PDF (Firestore version)"""
+    try:
+        user_id = get_current_user_id()
+
+        # Fetch PDF doc
+        pdf_ref = db.collection('users').document(user_id).collection('pdfs').document(pdf_name)
+        pdf_doc = pdf_ref.get()
+
+        if not pdf_doc.exists:
+            return jsonify({"error": "PDF not found"}), 404
+
+        pdf_data = pdf_doc.to_dict()
+        images = pdf_data.get("images", [])
+
+        # Bounds check
+        if image_index < 0 or image_index >= len(images):
+            return jsonify({"error": "Image index out of range"}), 404
+
+        img = images[image_index]
+        image_data = base64.b64decode(img["data"])
+
+        # MIME detection
+        ext_to_mime = {
+            "png": "image/png",
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "gif": "image/gif",
+            "bmp": "image/bmp",
+            "tiff": "image/tiff",
+            "webp": "image/webp"
+        }
+        mime_type = ext_to_mime.get(img.get("ext", "png").lower(), "image/png")
+
+        return Response(image_data, mimetype=mime_type)
+
+    except Exception as e:
+        print(f"Serve PDF image error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/pdf-image-count/<pdf_name>')
 def get_pdf_image_count(pdf_name):
-    """Get the number of extracted images from a PDF"""
-    if pdf_name not in pdf_store:
-        return jsonify({"error": "PDF not found"}), 404
-    
-    images = pdf_store[pdf_name].get("images", [])
-    image_info = []
-    for i, img in enumerate(images):
-        image_info.append({
-            "index": i,
-            "width": img["width"],
-            "height": img["height"],
-            "page": img["page"],
-            "url": f"/api/pdf-image/{pdf_name}/{i}"
-        })
-    
-    return jsonify({
-        "count": len(images),
-        "images": image_info
-    }), 200
+    """Get image metadata for a PDF (Firestore version)"""
+    try:
+        user_id = get_current_user_id()
+
+        # Fetch PDF document
+        pdf_ref = db.collection('users').document(user_id).collection('pdfs').document(pdf_name)
+        pdf_doc = pdf_ref.get()
+
+        if not pdf_doc.exists:
+            return jsonify({"error": "PDF not found"}), 404
+
+        pdf_data = pdf_doc.to_dict()
+        images = pdf_data.get("images", [])
+
+        image_info = []
+        for i, img in enumerate(images):
+            image_info.append({
+                "index": i,
+                "width": img.get("width"),
+                "height": img.get("height"),
+                "page": img.get("page"),
+                "url": f"/api/pdf-image/{pdf_name}/{i}"
+            })
+
+        return jsonify({
+            "count": len(images),
+            "images": image_info
+        }), 200
+
+    except Exception as e:
+        print(f"PDF image count error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # ============================================================================
 # NOTES GENERATION ROUTES
 # ============================================================================
 
-@app.route('/api/generate-notes', methods=['POST'])
-@require_subscription('note_generations')
-def generate_notes():
-    """
-    Generate study notes from PDF based on understanding level
-    Expected JSON:
-    {
-        "pdf_name": "example.pdf",
-        "level": "beginner" | "intermediate" | "advanced"
-    }
-    """
-    data = request.json
-    pdf_name = data.get('pdf_name')
-    level = data.get('level', 'beginner')
-    
-    if not pdf_name:
-        return jsonify({"error": "Missing pdf_name"}), 400
-    
-    if pdf_name not in pdf_store:
-        return jsonify({"error": f"PDF '{pdf_name}' not found"}), 404
-    
-    try:
-        pdf_content = pdf_store[pdf_name]["content"]
-        
-        # ── Quality check ──
-        is_ok, reason = check_pdf_quality(pdf_content)
-        if not is_ok:
-            return jsonify({"error": reason}), 400
-        
-        num_images = len(pdf_store[pdf_name].get("images", []))
-        content_length = len(pdf_content)
-        
-        # Split content into chunks for thorough coverage
-        CHUNK_SIZE = 4000  # characters per chunk
-        chunks = []
-        for i in range(0, content_length, CHUNK_SIZE):
-            chunks.append(pdf_content[i:i + CHUNK_SIZE])
-        
-        # Limit to reasonable number of chunks (max 15 API calls)
-        if len(chunks) > 15:
-            # Spread evenly across the content
-            step = len(chunks) / 15
-            selected = [chunks[int(i * step)] for i in range(15)]
-            chunks = selected
-        
-        num_chunks = len(chunks)
-        print(f"📄 PDF has {content_length} chars, split into {num_chunks} chunks")
-        
-        # Distribute images across chunks
-        def get_images_for_chunk(chunk_idx, total_chunks, total_images):
-            if total_images == 0:
-                return []
-            images_per_chunk = total_images / total_chunks
-            start_img = int(chunk_idx * images_per_chunk)
-            end_img = int((chunk_idx + 1) * images_per_chunk)
-            return list(range(start_img, min(end_img, total_images)))
-        
-        # Create level-specific prompt
-        level_instructions = {
-            "beginner": """Create SIMPLE and EASY-TO-UNDERSTAND notes. 
-            - Explain each concept in simple words
-            - Define all technical terms clearly
-            - Use everyday examples to explain ideas
-            - Make it suitable for someone new to the topic""",
-            
-            "intermediate": """Create DETAILED and COMPREHENSIVE notes.
-            - Explain concepts with depth but not overly complex
-            - Include real-world examples and applications
-            - Show connections between different concepts
-            - Include key formulas, facts, and important points""",
-            
-            "advanced": """Create DEEP and ANALYTICAL notes.
-            - Include advanced concepts and nuanced explanations
-            - Discuss critical thinking and different perspectives
-            - Connect concepts to broader fields
-            - Include challenging questions and advanced applications"""
-        }
-        
-        system_prompt = f"""You are an expert educational note-taking assistant. Write notes the way a TOP STUDENT writes in their notebook.
-
-{level_instructions.get(level, level_instructions['beginner'])}
-
-WRITING STYLE (THIS IS THE MOST IMPORTANT RULE):
-You MUST write in NATURAL FLOWING PARAGRAPHS. Each paragraph should be 4-6 sentences that explain a concept thoroughly.
-
-BAD FORMAT (NEVER DO THIS):
-- Microphone Captures Sound: The microphone detects sound waves from the environment.
-- Signal Conversion: Acoustic waves are converted into electrical signals.
-This is a glossary/dictionary format. Students cannot learn from this.
-
-GOOD FORMAT (ALWAYS DO THIS):
-The first step in the hearing process begins when the **microphone** picks up sound waves from the **surrounding** environment. These **acoustic** waves are then converted into electrical signals that the device can work with. Once converted, the **amplifier** takes these weak electrical signals and **fortifies** their strength significantly, making them much louder and clearer. The human ear **perceives** frequencies within a wide **spectrum**, and the hearing aid is designed to **encompass** this entire range. Finally, the **speaker** transforms these **amplified** signals back into sound waves and channels them directly into the ear canal.
-
-NOTICE: We bolded TWO types of words:
-1. Technical terms: microphone, amplifier, speaker, acoustic
-2. Uncommon vocabulary: fortifies, perceives, spectrum, encompass, surrounding
-Do NOT bold common words like: sound, device, signals, loud, clear
-
-FORMATTING RULES:
-1. Use ## for main topics, ### for subtopics
-2. Write PARAGRAPHS of 4-6 sentences under each heading
-3. NEVER use bullet points to define terms
-4. Bold BOTH technical terms AND uncommon vocabulary INLINE in paragraphs
-5. Include examples and analogies
-
-The notes should read like a textbook chapter, not a dictionary or glossary."""
-
-        # Generate notes for each chunk
-        all_notes = []
-        for chunk_idx, chunk_text in enumerate(chunks):
-            chunk_images = get_images_for_chunk(chunk_idx, num_chunks, num_images)
-            
-            if chunk_images:
-                img_refs = ", ".join([f"[PDF_IMG:{i}]" for i in chunk_images])
-                img_instruction = f"""
-IMAGES for this section: Place these image markers in your notes: {img_refs}
-- Put each image IMMEDIATELY AFTER a ### heading, BEFORE the paragraph
-- Use each EXACTLY ONCE"""
-            else:
-                img_instruction = ""
-            
-            chunk_message = f"""Write DETAILED study notes for this SECTION of a PDF ({level} level).
-This is section {chunk_idx + 1} of {num_chunks}.
-
-THE #1 RULE: Write in FLOWING PARAGRAPHS, not "Term: Definition" bullet lists.
-- Bold BOTH technical terms AND uncommon vocabulary words
-- Each section needs 2-3 paragraphs of 4-6 sentences each
-{img_instruction}
-
-SECTION CONTENT:
-{chunk_text}
-
-Write thorough notes covering ALL the content above. Start directly with headings and content."""
-
-            response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": chunk_message}
-                ],
-                temperature=0.7,
-                max_tokens=4096
-            )
-            
-            chunk_notes = response.choices[0].message.content
-            all_notes.append(chunk_notes)
-            print(f"  ✅ Chunk {chunk_idx + 1}/{num_chunks} done")
-        
-        # Combine all chunks
-        notes = "\n\n".join(all_notes)
-        
-        # Store notes in memory
-        pdf_store[pdf_name]["notes"] = notes
-        pdf_store[pdf_name]["notes_level"] = level
-        
-        return jsonify({
-            "success": True,
-            "notes": notes,
-            "pdf_name": pdf_name,
-            "level": level
-        }), 200
-    
-    except Exception as e:
-        print(f"❌ Notes Generation Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
-
 @app.route('/api/regenerate-notes', methods=['POST'])
 @require_subscription('note_regenerations')
 def regenerate_notes():
-    """
-    Regenerate different study notes from PDF
-    Expected JSON:
-    {
-        "pdf_name": "example.pdf",
-        "level": "beginner" | "intermediate" | "advanced",
-        "previous_notes": "previously generated notes"
-    }
-    """
     data = request.json
     pdf_name = data.get('pdf_name')
     level = data.get('level', 'beginner')
     previous_notes = data.get('previous_notes', '')
-    
+
     if not pdf_name:
         return jsonify({"error": "Missing pdf_name"}), 400
-    
-    if pdf_name not in pdf_store:
+
+    user_id = get_current_user_id()
+    pdf_ref = db.collection('users').document(user_id).collection('pdfs').document(pdf_name)
+    pdf_doc = pdf_ref.get()
+
+    if not pdf_doc.exists:
         return jsonify({"error": f"PDF '{pdf_name}' not found"}), 404
-    
+
     try:
-        pdf_content = pdf_store[pdf_name]["content"]
-        
+        pdf_data = pdf_doc.to_dict()
+
+        # ✅ FIX 1 — correct field name
+        pdf_content = pdf_data.get("pdfText", "")
+        images = pdf_data.get("images", [])
+
         # ── Quality check ──
         is_ok, reason = check_pdf_quality(pdf_content)
         if not is_ok:
             return jsonify({"error": reason}), 400
-        
-        num_images = len(pdf_store[pdf_name].get("images", []))
+
+        num_images = len(images)
         content_length = len(pdf_content)
-        
+
         # Split content into chunks
         CHUNK_SIZE = 4000
-        chunks = []
-        for i in range(0, content_length, CHUNK_SIZE):
-            chunks.append(pdf_content[i:i + CHUNK_SIZE])
-        
+        chunks = [pdf_content[i:i + CHUNK_SIZE] for i in range(0, content_length, CHUNK_SIZE)]
+
         if len(chunks) > 15:
             step = len(chunks) / 15
-            selected = [chunks[int(i * step)] for i in range(15)]
-            chunks = selected
-        
+            chunks = [chunks[int(i * step)] for i in range(15)]
+
         num_chunks = len(chunks)
-        
+
         def get_images_for_chunk(chunk_idx, total_chunks, total_images):
             if total_images == 0:
                 return []
@@ -686,76 +676,37 @@ def regenerate_notes():
             start_img = int(chunk_idx * images_per_chunk)
             end_img = int((chunk_idx + 1) * images_per_chunk)
             return list(range(start_img, min(end_img, total_images)))
-        
+
         level_instructions = {
-            "beginner": """Create SIMPLE and EASY-TO-UNDERSTAND notes with a DIFFERENT approach than before.
-            - Explain concepts in simple words with different wording
-            - Use DIFFERENT everyday examples
-            - Make it suitable for someone new to the topic""",
-            
-            "intermediate": """Create DETAILED and COMPREHENSIVE notes using a DIFFERENT structure.
-            - Explain concepts differently than the previous version
-            - Use DIFFERENT examples and applications
-            - Include different key facts and important points""",
-            
-            "advanced": """Create DIFFERENT DEEP and ANALYTICAL notes.
-            - Include different advanced angles and perspectives
-            - Discuss different critical thinking points
-            - Include different challenging questions"""
+            "beginner": "Create SIMPLE notes with a DIFFERENT approach than before.",
+            "intermediate": "Create DETAILED notes using a DIFFERENT structure.",
+            "advanced": "Create DIFFERENT DEEP and ANALYTICAL notes."
         }
-        
-        system_prompt = f"""You are an expert educational note-taking assistant. Write COMPLETELY DIFFERENT, ALTERNATIVE study notes from the previous version.
+
+        system_prompt = f"""You are an expert educational note-taking assistant.
+Write COMPLETELY DIFFERENT, ALTERNATIVE study notes.
 
 {level_instructions.get(level, level_instructions['beginner'])}
 
-WRITING STYLE (THIS IS THE MOST IMPORTANT RULE):
-You MUST write in NATURAL FLOWING PARAGRAPHS. Each paragraph should be 4-6 sentences.
+Write in NATURAL FLOWING PARAGRAPHS.
+Use headings (##, ###). No glossary format."""
 
-BAD FORMAT (NEVER DO THIS):
-- Microphone: Detects sound waves from the environment.
-- Signal Conversion: Acoustic waves are converted into electrical signals.
-This is a glossary. Students cannot learn from this.
-
-GOOD FORMAT (ALWAYS DO THIS):
-The first step begins when the **microphone** picks up sound waves from the environment. These **acoustic** waves are converted into electrical signals that the device can process. The **amplifier** then **fortifies** these signals significantly, making them much louder and clearer. The device **encompasses** the full **spectrum** of **audible** frequencies that the human ear **perceives**. Finally, the **speaker** transforms the amplified signals back into sound and channels them into the ear canal.
-
-NOTICE: Bold TWO types of words:
-1. Technical terms: microphone, amplifier, speaker
-2. Uncommon vocabulary: fortifies, perceives, spectrum, encompasses
-Do NOT bold common words like: sound, device, signals
-
-FORMATTING RULES:
-1. Use ## for main topics, ### for subtopics
-2. Write PARAGRAPHS of 4-6 sentences under each heading
-3. NEVER use bullet points to define terms
-4. Bold technical terms AND uncommon vocabulary INLINE in paragraphs
-
-Use a DIFFERENT organizational structure and angle than the previous version."""
-
-        # Generate notes for each chunk
         all_notes = []
         for chunk_idx, chunk_text in enumerate(chunks):
             chunk_images = get_images_for_chunk(chunk_idx, num_chunks, num_images)
-            
+
             if chunk_images:
                 img_refs = ", ".join([f"[PDF_IMG:{i}]" for i in chunk_images])
-                img_instruction = f"""
-IMAGES for this section: {img_refs}
-- Put each AFTER a ### heading, BEFORE the paragraph. Use each ONCE."""
+                img_instruction = f"\nIMAGES: {img_refs}"
             else:
                 img_instruction = ""
-            
-            chunk_message = f"""Write COMPLETELY DIFFERENT study notes for this SECTION ({level} level).
-Section {chunk_idx + 1} of {num_chunks}. Use DIFFERENT angle/structure than previous version.
 
-Write in FLOWING PARAGRAPHS, not "Term: Definition" lists.
-Bold BOTH technical terms AND uncommon vocabulary.
+            chunk_message = f"""Write COMPLETELY DIFFERENT study notes.
+Section {chunk_idx + 1} of {num_chunks}.
 {img_instruction}
 
-SECTION CONTENT:
-{chunk_text}
-
-Write thorough notes covering ALL content above. Start directly."""
+CONTENT:
+{chunk_text}"""
 
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -766,24 +717,27 @@ Write thorough notes covering ALL content above. Start directly."""
                 temperature=0.8,
                 max_tokens=4096
             )
-            
-            chunk_notes = response.choices[0].message.content
-            all_notes.append(chunk_notes)
-        
+
+            all_notes.append(response.choices[0].message.content)
+
         notes = "\n\n".join(all_notes)
-        
-        # Store updated notes
-        pdf_store[pdf_name]["notes"] = notes
-        
+
+        # ✅ FIX 3 — store back to Firestore
+        pdf_ref.update({
+            "notes": notes,
+            "notes_level": level,
+            "regeneratedAt": firestore.SERVER_TIMESTAMP
+        })
+
         return jsonify({
             "success": True,
             "notes": notes,
             "pdf_name": pdf_name,
             "level": level
         }), 200
-    
+
     except Exception as e:
-        print(f"   Notes Regeneration Error: {str(e)}")
+        print(f"Notes Regeneration Error: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Server error: {str(e)}"}), 500
@@ -796,41 +750,52 @@ Write thorough notes covering ALL content above. Start directly."""
 def chat_with_pdf():
     """
     Chat with a selected PDF
-    Expected JSON:
-    {
-        "pdf_name": "example.pdf",
-        "question": "What is this about?",
-        "model": "gpt-3.5-turbo" (optional)
-    }
     """
-    data = request.json
+    data = request.json or {}
+
     pdf_name = data.get('pdf_name')
     question = data.get('question')
     model = data.get('model', 'gpt-3.5-turbo')
-    
+
     if not pdf_name or not question:
         return jsonify({"error": "Missing pdf_name or question"}), 400
-    
-    if pdf_name not in pdf_store:
-        return jsonify({"error": f"PDF '{pdf_name}' not found"}), 404
-    
+
     try:
-        # Get relevant context from PDF
-        pdf_content = pdf_store[pdf_name]["content"]
+        user_id = get_current_user_id()
+
+        # 🔥 Fetch PDF from Firestore
+        pdf_ref = db.collection('users') \
+                    .document(user_id) \
+                    .collection('pdfs') \
+                    .document(pdf_name)
+
+        pdf_doc = pdf_ref.get()
+
+        if not pdf_doc.exists:
+            return jsonify({"error": f"PDF '{pdf_name}' not found"}), 404
+
+        pdf_data = pdf_doc.to_dict()
+        pdf_content = pdf_data.get("content", "")
+
+        if not pdf_content:
+            return jsonify({"error": "PDF content is empty"}), 400
+
+        # 🔥 Find relevant chunks
         relevant_chunks = find_relevant_chunks(pdf_content, question, top_k=3)
-        
-        # Create prompt with context
-        system_prompt = """You are a helpful AI assistant that answers questions based on provided PDF content. 
-        Answer only based on the information in the PDF. If the answer is not in the PDF, say so clearly."""
-        
-        user_message = f"""PDF Content (relevant excerpts):
-{relevant_chunks}
 
-Question: {question}
+        system_prompt = (
+            "You are a helpful AI assistant that answers questions based on provided PDF content. "
+            "Answer only using the PDF content. "
+            "If the answer is not present, clearly say it is not found."
+        )
 
-Please answer based only on the PDF content provided above."""
-        
-        # Call OpenAI API
+        user_message = (
+            "PDF Content (relevant excerpts):\n"
+            f"{relevant_chunks}\n\n"
+            f"Question: {question}\n\n"
+            "Answer based only on the content above."
+        )
+
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -840,7 +805,7 @@ Please answer based only on the PDF content provided above."""
             temperature=0.7,
             max_tokens=1000
         )
-        
+
         return jsonify({
             "success": True,
             "answer": response.choices[0].message.content,
@@ -848,7 +813,7 @@ Please answer based only on the PDF content provided above."""
             "question": question,
             "model": model
         }), 200
-    
+
     except Exception as e:
         print(f"❌ Chat Error: {str(e)}")
         import traceback
@@ -911,151 +876,128 @@ def find_relevant_chunks(text, query, top_k=3):
 # ============================================================================
 # TEST GENERATION ROUTES
 # ============================================================================
-
 @app.route('/api/generate-test', methods=['POST'])
 @require_subscription('tests')
 def generate_test():
     """
-    Generate 30 MCQ test from PDF content
-    Expected: JSON with pdf_name and difficulty (easy/normal/hard)
+    Generate MCQ test from PDF content
     """
-    data = request.json
+    data = request.json or {}
     pdf_name = data.get('pdf_name')
     difficulty = data.get('difficulty', 'normal')
-    
-    if not pdf_name or pdf_name not in pdf_store:
-        return jsonify({"error": "PDF not found"}), 400
-    
-    pdf_content = pdf_store[pdf_name]['content']
-    
-    # ── Quality check ──
-    is_ok, reason = check_pdf_quality(pdf_content)
-    if not is_ok:
-        return jsonify({"error": reason}), 400
-    
-    try:
-        # Create difficulty-specific prompt
-        difficulty_prompts = {
-            'easy': """EASY DIFFICULTY - Focus on basic recall and simple comprehension:
-- Questions should test ONLY basic definitions and facts
-- Avoid any application or analysis
-- Use straightforward, direct questions about key facts
-- Distractors should be obviously wrong
-- Test memory, not thinking""",
-            
-            'normal': """NORMAL DIFFICULTY - Balance recall with basic application:
-- Questions should require understanding AND basic application
-- Mix some factual questions with simple application scenarios
-- Distractors should be plausible but clearly wrong on reflection
-- Test comprehension and simple problem-solving""",
-            
-            'hard': """HARD DIFFICULTY - Focus on analysis, application, and synthesis:
-- Questions MUST require deep understanding and critical thinking
-- Include scenario-based questions requiring application to new situations
-- Ask students to analyze relationships between concepts
-- Include questions about WHY and HOW, not just WHAT
-- Distractors should be very plausible - choices that seem right at first but are subtly wrong
-- Test synthesis, analysis, and evaluation
-- Avoid simple recall questions - EVERY question should require reasoning"""
-        }
-        
-        difficulty_instruction = difficulty_prompts.get(difficulty, difficulty_prompts['normal'])
-        
-        prompt = f"""Based on the following content, generate exactly 30 multiple choice questions (MCQs) in JSON format.
 
-IMPORTANT: Generate questions ONLY from the actual content provided below. Do NOT make up, assume, or fabricate questions about topics not present in the content. If the content is unclear, unreadable, or too fragmented to understand, respond with EXACTLY this JSON: {{"error": "unreadable"}}
+    if not pdf_name:
+        return jsonify({"error": "Missing pdf_name"}), 400
+
+    try:
+        user_id = get_current_user_id()
+
+        # 🔥 Fetch PDF from Firestore
+        pdf_ref = db.collection('users') \
+                    .document(user_id) \
+                    .collection('pdfs') \
+                    .document(pdf_name)
+
+        pdf_doc = pdf_ref.get()
+
+        if not pdf_doc.exists:
+            return jsonify({"error": "PDF not found"}), 400
+
+        pdf_data = pdf_doc.to_dict()
+        pdf_content = pdf_data.get('content', '')
+
+        if not pdf_content:
+            return jsonify({"error": "PDF content empty"}), 400
+
+        # ── Quality check ──
+        is_ok, reason = check_pdf_quality(pdf_content)
+        if not is_ok:
+            return jsonify({"error": reason}), 400
+
+        # ─────────────────────────────────────
+        # Difficulty prompts
+        # ─────────────────────────────────────
+        difficulty_prompts = {
+            'easy': """EASY DIFFICULTY - Focus on basic recall and simple comprehension""",
+            'normal': """NORMAL DIFFICULTY - Balance recall with basic application""",
+            'hard': """HARD DIFFICULTY - Focus on analysis and reasoning"""
+        }
+
+        difficulty_instruction = difficulty_prompts.get(difficulty, difficulty_prompts['normal'])
+
+        prompt = f"""Generate exactly 30 MCQs from the content below.
 
 CONTENT:
 {pdf_content[:4000]}
 
-DIFFICULTY LEVEL REQUIREMENTS:
-{difficulty_instruction}
+Return ONLY valid JSON array of questions.
 
-You MUST return ONLY valid JSON array, nothing else. NO markdown, NO code blocks, NO extra text.
+Each question must have:
+id, question, options(4), correct_answer_index, explanation, wrong_explanation
+"""
 
-[
-  {{"id": 1, "question": "Question text here?", "options": ["Option A", "Option B", "Option C", "Option D"], "correct_answer_index": 0, "explanation": "Explanation of why correct answer is right", "wrong_explanation": "Explanation addressing why the student's choice was wrong and why the correct answer is right"}},
-  {{"id": 2, "question": "Another question?", "options": ["A", "B", "C", "D"], "correct_answer_index": 1, "explanation": "Explain correct answer", "wrong_explanation": "Address wrong answers"}},
-  ... continue for exactly 30 questions ...
-]
-
-CRITICAL REQUIREMENTS:
-- EXACTLY 30 questions with id from 1 to 30
-- For {difficulty} difficulty: {difficulty_instruction.split('-')[0].strip()}
-- RANDOMIZE correct_answer_index: Distribute answers across 0, 1, 2, 3 - NOT always index 0
-- Do NOT put correct answer in same position twice consecutively
-- Vary the position: some questions 0, some 1, some 2, some 3
-- Each question MUST have: id, question, options (exactly 4), correct_answer_index (0-3), explanation, wrong_explanation
-- Return ONLY the JSON array, nothing else
-- Do NOT include markdown code blocks or triple backticks
-- Ensure all strings are properly quoted"""
-        
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
             max_tokens=4096
         )
-        
-        # Parse response
+
         response_text = response.choices[0].message.content.strip()
-        
-        # Remove markdown formatting if present
+
+        # Remove markdown
         if '```json' in response_text:
             response_text = response_text.split('```json')[1].split('```')[0].strip()
         elif '```' in response_text:
             response_text = response_text.split('```')[1].split('```')[0].strip()
-        
-        # Try to parse JSON
-        try:
-            questions = json.loads(response_text)
-        except json.JSONDecodeError:
-            # If parsing fails, log the response and return error with more detail
-            print(f"Failed to parse response: {response_text[:500]}")
-            return jsonify({"error": "Backend API returned invalid format. Please try again."}), 500
-        
-        # Check if AI flagged content as unreadable
-        if isinstance(questions, dict) and questions.get('error') == 'unreadable':
-            return jsonify({"error": "The PDF content could not be understood well enough to generate a test. The text may be handwritten, blurry, or too fragmented. Please try a clearer PDF."}), 400
-        
-        # Ensure we have enough questions (accept 10+ instead of requiring exactly 30)
+
+        questions = json.loads(response_text)
+
         if not isinstance(questions, list) or len(questions) < 5:
-            return jsonify({"error": f"Too few questions generated ({len(questions) if isinstance(questions, list) else 'invalid format'}). Please try again."}), 500
-        
-        # Validate each question has required fields
+            return jsonify({"error": "Too few questions generated"}), 500
+
+        # Normalize fields
         for q in questions:
-            if not all(k in q for k in ['id', 'question', 'options', 'correct_answer_index', 'explanation']):
-                return jsonify({"error": "Question missing required fields"}), 500
-            # Add wrong_explanation if missing
             if 'wrong_explanation' not in q:
-                q['wrong_explanation'] = q['explanation']
-        
-        # Store test in memory with pdf mapping
-        test_id = f"{pdf_name}_test_{difficulty}"
-        pdf_store[pdf_name][f'test_{difficulty}'] = {
-            'questions': questions,
-            'difficulty': difficulty
-        }
-        
-        # Return questions WITHOUT revealing correct answer
-        safe_questions = []
-        for q in questions:
-            safe_questions.append({
+                q['wrong_explanation'] = q.get('explanation', '')
+
+        # ─────────────────────────────────────
+        # 🔥 Store Test in Firestore
+        # ─────────────────────────────────────
+        test_id = f"{pdf_name}_test_{difficulty}_{int(time.time())}"
+
+        test_ref = db.collection('users') \
+                     .document(user_id) \
+                     .collection('tests') \
+                     .document(test_id)
+
+        test_ref.set({
+            "pdf_name": pdf_name,
+            "difficulty": difficulty,
+            "questions": questions,
+            "created_at": firestore.SERVER_TIMESTAMP
+        })
+
+        # ─────────────────────────────────────
+        # Return safe questions (no answers)
+        # ─────────────────────────────────────
+        safe_questions = [
+            {
                 'id': q['id'],
                 'question': q['question'],
                 'options': q['options']
-            })
-        
+            } for q in questions
+        ]
+
         return jsonify({
             "test_id": test_id,
             "difficulty": difficulty,
             "total_questions": len(safe_questions),
             "questions": safe_questions
         }), 200
-    
-    except json.JSONDecodeError as e:
-        print(f"JSON Parse Error: {e}")
-        return jsonify({"error": "Failed to parse test questions"}), 500
+
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid AI response format"}), 500
     except Exception as e:
         print(f"Error generating test: {e}")
         import traceback
@@ -1063,62 +1005,85 @@ CRITICAL REQUIREMENTS:
         return jsonify({"error": str(e)}), 500
 
 
+
 @app.route('/api/check-answer', methods=['POST'])
 def check_answer():
     """
     Check if answer is correct and provide explanation
-    Expected: JSON with pdf_name, difficulty, question_id, and selected_answer_index
+    Expected JSON:
+    {
+        "test_id": "abc123",
+        "question_id": 5,
+        "selected_answer_index": 2
+    }
     """
-    data = request.json
-    pdf_name = data.get('pdf_name')
-    difficulty = data.get('difficulty')
+    data = request.json or {}
+
+    test_id = data.get('test_id')
     question_id = data.get('question_id')
     selected_index = data.get('selected_answer_index')
-    
-    if not pdf_name or pdf_name not in pdf_store:
-        return jsonify({"error": "PDF not found"}), 400
-    
+
+    if not test_id:
+        return jsonify({"error": "Missing test_id"}), 400
+
     try:
-        test_data = pdf_store[pdf_name].get(f'test_{difficulty}')
-        if not test_data:
-            return jsonify({"error": "Test not found"}), 400
-        
-        questions = test_data['questions']
+        user_id = get_current_user_id()
+
+        # 🔥 Fetch test from Firestore
+        test_ref = db.collection('users') \
+                     .document(user_id) \
+                     .collection('tests') \
+                     .document(test_id)
+
+        test_doc = test_ref.get()
+
+        if not test_doc.exists:
+            return jsonify({"error": "Test not found"}), 404
+
+        test_data = test_doc.to_dict()
+        questions = test_data.get('questions', [])
+
+        # Find question
         question = next((q for q in questions if q['id'] == question_id), None)
-        
+
         if not question:
-            return jsonify({"error": "Question not found"}), 400
-        
-        is_correct = selected_index == question['correct_answer_index']
-        
+            return jsonify({"error": "Question not found"}), 404
+
+        correct_index = question['correct_answer_index']
+        is_correct = selected_index == correct_index
+
         if is_correct:
             return jsonify({
                 "is_correct": True,
                 "message": "✅ Correct!",
                 "explanation": question.get('explanation', 'Well done!')
             }), 200
-        else:
-            # Return pre-generated explanation (no API call needed - instant response)
-            wrong_answer_text = question['options'][selected_index]
-            correct_answer_text = question['options'][question['correct_answer_index']]
-            
-            # Use the pre-generated wrong_explanation
-            explanation = question.get('wrong_explanation', question.get('explanation', 'That answer is incorrect.'))
-            
-            # Ensure proper formatting
-            if not explanation.lower().startswith('your answer'):
-                explanation = f"Your answer '{wrong_answer_text}' is incorrect. {explanation}"
-            
-            return jsonify({
-                "is_correct": False,
-                "message": "❌ Incorrect",
-                "your_answer": wrong_answer_text,
-                "correct_answer": correct_answer_text,
-                "explanation": explanation
-            }), 200
-    
+
+        # ❌ Incorrect case
+        wrong_answer_text = question['options'][selected_index]
+        correct_answer_text = question['options'][correct_index]
+
+        explanation = question.get(
+            'wrong_explanation',
+            question.get('explanation', 'That answer is incorrect.')
+        )
+
+        # Normalize formatting
+        if not explanation.lower().startswith('your answer'):
+            explanation = f"Your answer '{wrong_answer_text}' is incorrect. {explanation}"
+
+        return jsonify({
+            "is_correct": False,
+            "message": "❌ Incorrect",
+            "your_answer": wrong_answer_text,
+            "correct_answer": correct_answer_text,
+            "explanation": explanation
+        }), 200
+
     except Exception as e:
         print(f"Error checking answer: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -1407,90 +1372,125 @@ Keep responses concise (2-3 sentences max) and conversational. Be friendly and h
 def generate_flashcards():
     """
     Generate flashcards from PDF content
-    Expected: JSON with pdf_name
+    Expected JSON:
+    {
+        "pdf_name": "example.pdf"
+    }
     """
-    data = request.get_json()
+    data = request.get_json() or {}
     pdf_name = data.get('pdf_name')
-    
-    if not pdf_name or pdf_name not in pdf_store:
-        return jsonify({"error": "PDF not found"}), 400
-    
+
+    if not pdf_name:
+        return jsonify({"error": "Missing pdf_name"}), 400
+
     try:
-        pdf_content = pdf_store[pdf_name]["content"]
-        
+        user_id = get_current_user_id()
+
+        # 🔥 Fetch PDF from Firestore
+        pdf_ref = db.collection('users') \
+                    .document(user_id) \
+                    .collection('pdfs') \
+                    .document(pdf_name)
+
+        pdf_doc = pdf_ref.get()
+
+        if not pdf_doc.exists:
+            return jsonify({"error": "PDF not found"}), 404
+
+        pdf_data = pdf_doc.to_dict()
+        pdf_content = pdf_data.get("content", "")
+
+        if not pdf_content:
+            return jsonify({"error": "PDF content is empty"}), 400
+
         # ── Quality check ──
         is_ok, reason = check_pdf_quality(pdf_content)
         if not is_ok:
             return jsonify({"error": reason}), 400
-        
-        # Use up to 6000 chars for comprehensive flashcard coverage
+
+        # Use up to 6000 chars
         content = pdf_content[:6000]
-        
-        prompt = f"""Read the following content and generate flashcards for studying. Extract the most important terms, concepts, processes, and facts.
+
+        prompt = f"""Read the following content and generate flashcards.
 
 Content:
 {content}
 
-Generate 15-25 flashcards as a JSON array. Each flashcard has a "term" (the concept/keyword) and a "definition" (clear, concise explanation in 1-3 sentences).
+Generate 15-25 flashcards as JSON array:
+Each flashcard must have:
+- "term"
+- "definition"
 
-Rules:
-- Cover ALL major topics from the content
-- Terms should be specific: names, processes, concepts, formulas, vocabulary
-- Definitions should be clear and student-friendly
-- Do NOT repeat similar cards
-- Include both factual recall and conceptual understanding cards
+Return ONLY valid JSON array.
+"""
 
-Return ONLY a valid JSON array, no markdown, no code blocks. Use this exact format:
-[{{"term": "Example Term", "definition": "A clear explanation."}}]
-
-Generate the flashcards NOW:"""
-        
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You generate educational flashcards from study material. Return ONLY valid JSON arrays."},
+                {
+                    "role": "system",
+                    "content": "You generate educational flashcards. Return ONLY valid JSON arrays."
+                },
                 {"role": "user", "content": prompt}
             ],
             temperature=0.7,
             max_tokens=3500
         )
-        
+
         response_text = response.choices[0].message.content.strip()
-        
-        # Clean markdown formatting
+
+        # Remove markdown
         if '```json' in response_text:
             response_text = response_text.split('```json')[1].split('```')[0].strip()
         elif '```' in response_text:
             response_text = response_text.split('```')[1].split('```')[0].strip()
-        
+
         cards_data = json.loads(response_text)
-        
+
         if not isinstance(cards_data, list) or len(cards_data) < 5:
-            return jsonify({"error": "Could not generate enough flashcards. Please try again."}), 500
-        
-        # Ensure each card has term and definition
-        valid_cards = []
-        for card in cards_data:
-            if 'term' in card and 'definition' in card:
-                valid_cards.append({
-                    'term': card['term'],
-                    'definition': card['definition']
-                })
-        
+            return jsonify({"error": "Could not generate enough flashcards"}), 500
+
+        # Validate cards
+        valid_cards = [
+            {
+                "term": card["term"],
+                "definition": card["definition"]
+            }
+            for card in cards_data
+            if "term" in card and "definition" in card
+        ]
+
         if len(valid_cards) < 5:
-            return jsonify({"error": "Could not generate valid flashcards. Please try again."}), 500
-        
+            return jsonify({"error": "Invalid flashcards generated"}), 500
+
+        # 🔥 Store flashcards in Firestore
+        flashcard_id = f"{pdf_name}_flashcards_{int(time.time())}"
+
+        flashcard_ref = db.collection('users') \
+                          .document(user_id) \
+                          .collection('flashcards') \
+                          .document(flashcard_id)
+
+        flashcard_ref.set({
+            "pdf_name": pdf_name,
+            "flashcards": valid_cards,
+            "created_at": firestore.SERVER_TIMESTAMP
+        })
+
         return jsonify({
             "success": True,
-            "flashcards": valid_cards,
-            "count": len(valid_cards)
+            "flashcard_id": flashcard_id,
+            "count": len(valid_cards),
+            "flashcards": valid_cards
         }), 200
-    
+
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid AI response format"}), 500
     except Exception as e:
         print(f"❌ Flashcard Generation Error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/generate-flowchart', methods=['POST'])
@@ -1498,83 +1498,96 @@ Generate the flashcards NOW:"""
 def generate_flowchart():
     """
     Generate a professional flowchart using Mermaid syntax
-    Expected: JSON with either pdf_name or subject (or both)
+    Expected JSON:
+    {
+        "pdf_name": "example.pdf" (optional),
+        "subject": "Photosynthesis" (optional),
+        "model": "gpt-3.5-turbo" (optional)
+    }
     """
-    data = request.get_json()
+    data = request.get_json() or {}
     pdf_name = data.get('pdf_name')
     subject = data.get('subject')
     model = data.get('model', 'gpt-3.5-turbo')
-    
+
     if not pdf_name and not subject:
         return jsonify({"error": "Either pdf_name or subject required"}), 400
-    
+
     try:
-        # Get content to create flowchart from
         content = ""
-        
-        if pdf_name and pdf_name in pdf_store:
-            # Use FULL PDF content (truncated to fit token limits)
-            pdf_content = pdf_store[pdf_name]["content"]
-            
+
+        # 🔥 Fetch from Firestore if PDF provided
+        if pdf_name:
+            user_id = get_current_user_id()
+
+            pdf_ref = db.collection('users') \
+                        .document(user_id) \
+                        .collection('pdfs') \
+                        .document(pdf_name)
+
+            pdf_doc = pdf_ref.get()
+
+            if not pdf_doc.exists:
+                return jsonify({"error": "PDF not found"}), 404
+
+            pdf_data = pdf_doc.to_dict()
+            pdf_content = pdf_data.get("content", "")
+
+            if not pdf_content:
+                return jsonify({"error": "PDF content is empty"}), 400
+
             # ── Quality check ──
             is_ok, reason = check_pdf_quality(pdf_content)
             if not is_ok:
                 return jsonify({"error": reason}), 400
-            
-            # Send up to 6000 chars of full content for comprehensive flowchart
-            if len(pdf_content) > 6000:
-                content = f"PDF Content (full chapter):\n{pdf_content[:6000]}"
-            else:
-                content = f"PDF Content (full chapter):\n{pdf_content}"
+
+            # Truncate for tokens
+            truncated = pdf_content[:6000]
+            content = f"PDF Content:\n{truncated}"
+
         elif subject:
-            # Use subject text
             content = f"Topic: {subject}"
-        else:
-            return jsonify({"error": "PDF not found"}), 404
-        
-        # Create Mermaid flowchart generation prompt
-        mermaid_prompt = f"""Read the following content carefully and create a DETAILED, ACCURATE Mermaid flowchart that captures ALL the key concepts, processes, and relationships.
+
+        # Mermaid prompt
+        mermaid_prompt = f"""Create a DETAILED Mermaid flowchart.
 
 Content:
 {content}
 
-IMPORTANT RULES:
-1. Read the content THOROUGHLY - extract EVERY important concept, process, term, and relationship
-2. Use FULL words in labels - NEVER abbreviate or truncate (write "Metabolism" not "Metabolis", write "Characteristics of Life Processes" not "Characteristics of Life P")
-3. Keep node labels SHORT but COMPLETE - if a label is too long, split into multiple lines using <br/> OR simplify the wording while keeping meaning
-4. Use graph TD (top-down layout)
-5. Show the main topic at the top, then branch into sub-topics and details
-6. Include 12-20 nodes for comprehensive coverage
-7. Use different node shapes: A[Rectangle] for concepts, A{{Diamond}} for decisions, A([Rounded]) for processes
-8. Label arrows with relationships: A -->|type| B
-9. Cover ALL major topics from the content, not just the first few
+RULES:
+1. Extract ALL key concepts and relationships
+2. Use FULL words (no truncation)
+3. Use graph TD layout
+4. 12–20 nodes
+5. Mix node shapes:
+   - [Rectangle] concepts
+   - {{Diamond}} decisions
+   - ([Rounded]) processes
+6. Label arrows where meaningful
 
-Return ONLY valid Mermaid code, no explanations. Example:
-```
+Return ONLY Mermaid code.
+
+Example:
 graph TD
     A[Life Processes] --> B[Nutrition]
-    A --> C[Respiration]
-    A --> D[Transportation]
-    B --> E[Autotrophic Nutrition]
-    B --> F[Heterotrophic Nutrition]
-```
+"""
 
-Generate the complete Mermaid flowchart NOW:"""
-
-        # Call OpenAI API
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "You are an expert at creating beautiful, professional flowcharts using Mermaid.js syntax. Generate clean, well-organized Mermaid code that renders as professional diagrams."},
+                {
+                    "role": "system",
+                    "content": "You generate professional Mermaid diagrams."
+                },
                 {"role": "user", "content": mermaid_prompt}
             ],
             temperature=0.7,
             max_tokens=2500
         )
-        
+
         mermaid_code = response.choices[0].message.content.strip()
-        
-        # Clean up if wrapped in markdown code blocks
+
+        # Remove markdown wrapping
         if mermaid_code.startswith('```'):
             mermaid_code = mermaid_code.split('```')[1]
             if mermaid_code.startswith('mermaid\n'):
@@ -1582,25 +1595,22 @@ Generate the complete Mermaid flowchart NOW:"""
             elif mermaid_code.startswith('mermaid'):
                 mermaid_code = mermaid_code[7:]
             mermaid_code = mermaid_code.strip()
-        
-        # Sanitize mermaid code: remove quotes within node labels to avoid syntax errors
+
+        # Sanitize quotes (Mermaid breaks easily)
         import re
-        # Replace quotes inside square brackets with apostrophes or remove them
-        mermaid_code = re.sub(r'\[([^[\]]*)"([^[\]]*)"([^[\]]*)\]', r'[\1\2\3]', mermaid_code)
-        # Handle multiple quotes in same label
         mermaid_code = re.sub(r'"', "'", mermaid_code)
-        
+
         return jsonify({
             "success": True,
             "mermaid_code": mermaid_code,
-            "subject": subject or pdf_name
+            "source": pdf_name or subject
         }), 200
-    
+
     except Exception as e:
         print(f"❌ Flowchart Generation Error: {str(e)}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": f"Server error: {str(e)}"}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -1866,5 +1876,6 @@ if __name__ == "__main__":
     print(f"🚀 LiftOff AI Backend starting on 0.0.0.0:{port}")
     # Only run locally
     if os.getenv("RENDER") is None:  # Render sets this env automatically
+        print(f"🚀 LiftOff AI Backend starting on localhost :{port}")
         app.run(host="0.0.0.0", port=port, debug=True)
 

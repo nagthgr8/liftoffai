@@ -877,7 +877,34 @@ body {
 </div>
 
 <script>
-//const API_BASE = "http://localhost:5000/api";
+function getStoredUser() {
+    const raw = localStorage.getItem("liftoffUser");
+    if (!raw) return null;
+
+    const user = JSON.parse(raw);
+
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    if (Date.now() - user.timestamp > ONE_HOUR) {
+        console.warn("Token expired locally");
+        localStorage.removeItem("liftoffUser");
+        return null;
+    }
+
+    return user;
+}
+
+const user =  getStoredUser();
+if (!user) {
+    window.location.href = "login.html";
+} else {
+    console.log("Logged in user:", user);
+}
+function getAuthToken() {
+    return user.token || null;
+}
+
+const API_BASE = "/api";
 let selectedFile = null;
 let selectedPdf = null;
 let selectedDifficulty = 'easy';
@@ -895,6 +922,9 @@ let serverRunning = false;
 async function checkServerStatus() {
     try {
         const response = await fetch(`${API_BASE}/health`, {
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
             signal: AbortSignal.timeout(2000)
         });
         serverRunning = response.ok;
@@ -983,6 +1013,9 @@ document.getElementById('pdfInput').addEventListener('change', async (e) => {
     try {
         const response = await fetch(`${API_BASE}/upload-pdf`, {
             method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
             body: formData
         });
 
@@ -1034,7 +1067,7 @@ async function startTest() {
     try {
         const response = await fetch(`${API_BASE}/generate-test`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 pdf_name: selectedPdf,
                 difficulty: selectedDifficulty
@@ -1121,7 +1154,7 @@ async function selectAnswer(optionIndex) {
     try {
         const response = await fetch(`${API_BASE}/check-answer`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 pdf_name: selectedPdf,
                 difficulty: selectedDifficulty,
@@ -1201,7 +1234,7 @@ async function regenerateExplanation() {
     try {
         const response = await fetch(`${API_BASE}/regenerate-explanation`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 question: currentQuestionData.question,
                 student_answer: currentQuestionData.student_answer,
@@ -1259,7 +1292,7 @@ function completeTest() {
     if (user && user.username) {
         fetch(`${API_BASE}/save-test-history`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 username: user.username,
                 testRecord: testRecord
@@ -1339,7 +1372,7 @@ async function sendMessage() {
     try {
         const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 pdf_name: selectedPdf,
                 question: message

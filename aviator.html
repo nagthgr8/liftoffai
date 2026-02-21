@@ -343,14 +343,33 @@ body {
 </div>
 
 <script>
-//const API_BASE = 'http://localhost:5000/api';
+const API_BASE = '/api';
 
 // Get user from localStorage
-const user = JSON.parse(localStorage.getItem('liftoffUser'));
+function getStoredUser() {
+    const raw = localStorage.getItem("liftoffUser");
+    if (!raw) return null;
+
+    const user = JSON.parse(raw);
+
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    if (Date.now() - user.timestamp > ONE_HOUR) {
+        console.warn("Token expired locally");
+        localStorage.removeItem("liftoffUser");
+        return null;
+    }
+
+    return user;
+}
+
+const user =  getStoredUser();
 if (!user) {
     window.location.href = 'login.html';
 }
-
+function getAuthToken() {
+    return user.token || null;
+}
 // Load user stats on page load
 window.addEventListener('load', () => {
     loadUserStats();
@@ -375,7 +394,7 @@ async function loadUserStats() {
     try {
         const response = await fetch(`${API_BASE}/get-test-history`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({ username: user.username })
         });
 
@@ -503,7 +522,7 @@ async function sendMessage() {
         
         const response = await fetch(`${API_BASE}/aviator-chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify(payload)
         });
 

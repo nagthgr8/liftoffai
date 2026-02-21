@@ -426,6 +426,34 @@ body {
 </div>
 
 <script>
+function getStoredUser() {
+    const raw = localStorage.getItem("liftoffUser");
+    if (!raw) return null;
+
+    const user = JSON.parse(raw);
+
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    if (Date.now() - user.timestamp > ONE_HOUR) {
+        console.warn("Token expired locally");
+        localStorage.removeItem("liftoffUser");
+        return null;
+    }
+
+    return user;
+}
+
+const user =  getStoredUser();
+if (!user) {
+    window.location.href = "login.html";
+} else {
+    document.getElementById("fullName").innerText = user.fullname || "User";
+    document.getElementById("usernameTag").innerText = "@" + user.username;
+}
+function getAuthToken() {
+    return user.token || null;
+}
+
 // ── Check subscription tier and hide Ultra-only features ──
 function initSubscriptionFeatures() {
     var tier = localStorage.getItem('liftoffTier') || 'free';
@@ -436,21 +464,11 @@ function initSubscriptionFeatures() {
         if (card) card.style.display = 'none';
     }
 }
-
 // Run on page load
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initSubscriptionFeatures);
 } else {
     initSubscriptionFeatures();
-}
-
-const user = JSON.parse(localStorage.getItem("liftoffUser"));
-
-if (!user) {
-    window.location.href = "login.html";
-} else {
-    document.getElementById("fullName").innerText = user.fullname || "User";
-    document.getElementById("usernameTag").innerText = "@" + user.username;
 }
 
 /* ════════════════════════════════════════
@@ -690,7 +708,6 @@ function buildPieChart(testHistory) {
    TEST HISTORY + STATS
    ════════════════════════════════════════ */
 function loadTestHistory() {
-    const user = JSON.parse(localStorage.getItem('liftoffUser'));
     
     if (!user || !user.username) {
         const container = document.getElementById('testHistoryContainer');
@@ -703,7 +720,7 @@ function loadTestHistory() {
     const API_BASE = '/api';
     fetch(`${API_BASE}/get-test-history`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
         body: JSON.stringify({ username: user.username })
     })
     .then(response => response.json())

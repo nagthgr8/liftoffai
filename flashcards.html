@@ -635,7 +635,33 @@ body {
     </div>
 
     <script>
-        //const API_BASE = 'http://localhost:5000/api';
+        function getStoredUser() {
+            const raw = localStorage.getItem("liftoffUser");
+            if (!raw) return null;
+
+            const user = JSON.parse(raw);
+
+            const ONE_HOUR = 60 * 60 * 1000;
+
+            if (Date.now() - user.timestamp > ONE_HOUR) {
+                console.warn("Token expired locally");
+                localStorage.removeItem("liftoffUser");
+                return null;
+            }
+
+            return user;
+        }
+
+        const user =  getStoredUser();
+        if (!user) {
+            window.location.href = "login.html";
+        } else {
+            console.log("Logged in user:", user);
+        }
+        function getAuthToken() {
+            return user.token || null;
+        }
+        const API_BASE = '/api';
         let selectedPdf = null;
         let flashcards = [];
         let currentIndex = 0;
@@ -661,6 +687,7 @@ body {
             try {
                 const response = await fetch(`${API_BASE}/upload-pdf`, {
                     method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` },
                     body: formData
                 });
 
@@ -699,7 +726,7 @@ body {
             try {
                 const response = await fetch(`${API_BASE}/generate-flashcards`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
                     body: JSON.stringify({ pdf_name: selectedPdf })
                 });
 
@@ -918,7 +945,7 @@ body {
 
                 const response = await fetch(`${API_BASE}/aviator-chat`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
                     body: JSON.stringify({
                         message: text,
                         pdf_name: selectedPdf,

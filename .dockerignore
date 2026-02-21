@@ -1,0 +1,36 @@
+# flyctl launch added from .gitignore
+# Logs
+**/logs
+**/*.log
+
+# Firebase
+**/.firebase
+**/firebase-debug.log*
+
+# Node
+**/node_modules
+**/.npm
+**/.eslintcache
+
+# Python
+**/__pycache__
+**/*.pyc
+**/venv
+
+# Environment variables
+**/.env
+**/.env*
+
+# OS files
+**/.DS_Store
+**/Thumbs.db
+
+# Build outputs
+**/dist
+**/build
+
+# Coverage
+**/coverage
+**/.nyc_output
+**/serviceAccountKey.json
+fly.toml

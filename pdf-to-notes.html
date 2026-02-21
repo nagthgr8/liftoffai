@@ -1191,7 +1191,34 @@ body {
 </div>
 
 <script>
-//const API_BASE = "http://localhost:5000/api";
+function getStoredUser() {
+    const raw = localStorage.getItem("liftoffUser");
+    if (!raw) return null;
+
+    const user = JSON.parse(raw);
+
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    if (Date.now() - user.timestamp > ONE_HOUR) {
+        console.warn("Token expired locally");
+        localStorage.removeItem("liftoffUser");
+        return null;
+    }
+
+    return user;
+}
+
+const user =  getStoredUser();
+if (!user) {
+    window.location.href = "login.html";
+} else {
+    console.log("Logged in user:", user);
+}
+function getAuthToken() {
+    return user.token || null;
+}
+
+const API_BASE = "/api";
 let selectedFile = null;
 let selectedPdf = null;
 let understandingLevel = 'beginner';
@@ -1201,7 +1228,9 @@ let currentNotes = null;
 // Check server status
 async function checkServerStatus() {
     try {
+        console.log("Checking server status... " + API_BASE);
         const response = await fetch(`${API_BASE}/health`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
             signal: AbortSignal.timeout(2000)
         });
         serverRunning = response.ok;
@@ -1225,19 +1254,21 @@ function selectLevel(level) {
 // PDF Upload
 document.getElementById('pdfInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
+    console.log("Selected file:", file);
     if (!file) return;
 
     // Prevent uploading if already have a PDF
     if (selectedPdf) return;
 
     selectedFile = file;
+    console.log("API_BASE:", API_BASE);
     await checkServerStatus();
 
     if (!serverRunning) {
         addAviatorMessage("Backend server not running. Start with: python app.py");
         return;
     }
-
+    console.log("Server running:", serverRunning);
     // Show fullscreen loading overlay
     const overlay = document.getElementById('uploadOverlay');
     document.getElementById('uploadStatus').textContent = `Uploading "${file.name}"...`;
@@ -1250,8 +1281,10 @@ document.getElementById('pdfInput').addEventListener('change', async (e) => {
     formData.append('pdf_name', file.name);
 
     try {
+        console.log("Uploading PDF...");
         const response = await fetch(`${API_BASE}/upload-pdf`, {
             method: 'POST',
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
             body: formData
         });
 
@@ -1310,7 +1343,7 @@ async function generateNotes() {
     try {
         const response = await fetch(`${API_BASE}/generate-notes`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 pdf_name: selectedPdf,
                 level: understandingLevel
@@ -1354,7 +1387,7 @@ async function regenerateNotes() {
     try {
         const response = await fetch(`${API_BASE}/regenerate-notes`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 pdf_name: selectedPdf,
                 level: understandingLevel,
@@ -2019,7 +2052,7 @@ async function processTooltipTerms(container) {
         try {
             const response = await fetch(`${API_BASE}/fetch-definition`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
                 body: JSON.stringify({
                     term: termText,
                     context: selectedPdf || document.title,
@@ -2074,7 +2107,7 @@ async function processImagePlaceholders(container) {
         try {
             const response = await fetch(`${API_BASE}/fetch-image`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
                 body: JSON.stringify({
                     query: imageQuery,
                     context: selectedPdf || ''
@@ -2113,7 +2146,7 @@ async function fetchImageForTerm(termElement, termText) {
     try {
         const response = await fetch(`${API_BASE}/fetch-image`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 query: termText,
                 context: "portrait biography historical figure"
@@ -2152,7 +2185,7 @@ async function sendMessage() {
     try {
         const response = await fetch(`${API_BASE}/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAuthToken()}` },
             body: JSON.stringify({
                 pdf_name: selectedPdf,
                 question: message

@@ -22,6 +22,7 @@ from firebase_admin import credentials, firestore, storage, auth
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+
 if not service_account_json:
     raise ValueError("Environment variable FIREBASE_SERVICE_ACCOUNT_JSON not set")
 

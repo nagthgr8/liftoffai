@@ -1826,12 +1826,10 @@ def verify_token():
 # RUN SERVER
 # ============================================================================
 
-if __name__ == '__main__':
-    # Check if API key is set
-    if not os.getenv("OPENAI_API_KEY"):
-        print("\n⚠️  WARNING: OPENAI_API_KEY not set!")
-        print("Create a .env file with: OPENAI_API_KEY=your_key_here\n")
-    
-    print("🚀 LiftOff AI Backend starting on http://localhost:5000")
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    print(f"🚀 LiftOff AI Backend starting on 0.0.0.0:{port}")
+    # Only run locally
+    if os.getenv("RENDER") is None:  # Render sets this env automatically
+        app.run(host="0.0.0.0", port=port, debug=True)
+

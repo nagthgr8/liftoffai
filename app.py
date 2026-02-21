@@ -18,7 +18,8 @@ import re
 from functools import wraps
 import firebase_admin
 from firebase_admin import credentials, firestore, storage, auth
-
+# Load environment variables
+load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 service_account_json = os.environ.get('FIREBASE_SERVICE_ACCOUNT_JSON')
 
@@ -38,10 +39,6 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 bucket = storage.bucket()
-
-
-# Load environment variables
-load_dotenv()
 
 app = Flask(__name__)
 CORS(app)

@@ -16,8 +16,20 @@ import urllib.parse
 from datetime import datetime, date
 import re
 from functools import wraps
+import firebase_admin
+from firebase_admin import credentials, firestore, storage, auth
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+cred = credentials.Certificate(os.path.join(BASE_DIR, 'serviceAccountKey.json'))
+firebase_admin.initialize_app(cred, {
+    'storageBucket': 'liftoff.appspot.com'
+})
+
+db = firestore.client()
+
+bucket = storage.bucket()
+
 
 # Load environment variables
 load_dotenv()
@@ -269,58 +281,75 @@ def check_pdf_quality(text, min_words=30, min_word_ratio=0.4):
     
     return True, "OK"
 
-
+def get_current_user_id():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header:
+        return None
+    id_token = auth_header.split('Bearer ')[-1]
+    try:
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        return uid
+    except Exception as e:
+        print('Token verification failed:', e)
+        return None
 # ============================================================================
 # PDF MANAGEMENT ROUTES
 # ============================================================================
 
 @app.route('/api/upload-pdf', methods=['POST'])
 def upload_pdf():
-    """
-    Upload a PDF and extract text content
-    Expected: Form data with 'pdf' file and 'pdf_name' field
-    """
+    user_id = get_current_user_id()
+
     if 'pdf' not in request.files:
         return jsonify({"error": "No PDF file provided"}), 400
     
     file = request.files['pdf']
     pdf_name = request.form.get('pdf_name', file.filename)
-    
+
     if file.filename == '':
         return jsonify({"error": "No file selected"}), 400
     
     try:
-        # Read file bytes for both text extraction and image extraction
+        # Read bytes for processing
         file_bytes = file.read()
-        file.seek(0)  # Reset for text extraction
-        
-        # Extract text from PDF
+        file.seek(0)
+
+        # Extract text & images
         pdf_text = extract_pdf_text(file)
-        
-        # Extract images from PDF using PyMuPDF
         extracted_images = extract_pdf_images(file_bytes)
-        print(f"📸 Extracted {len(extracted_images)} images from PDF '{pdf_name}'")
-        
-        # Store in memory (in production, use database)
-        pdf_store[pdf_name] = {
-            "content": pdf_text,
+        chunks = chunk_text(pdf_text)
+
+        # Upload PDF to Firebase Storage
+        blob = bucket.blob(f'users/{user_id}/pdfs/{pdf_name}')
+        blob.upload_from_string(file_bytes, content_type='application/pdf')
+        # Optional: get public URL
+        file_url = blob.generate_signed_url(expiration=3600*24*7)  # 7-day signed URL
+
+        # Save metadata to Firestore
+        pdf_ref = db.collection('users').document(user_id).collection('pdfs').document(pdf_name)
+        pdf_ref.set({
             "filename": file.filename,
-            "chunks": chunk_text(pdf_text),
-            "images": extracted_images  # List of {data: base64, ext: 'png', width, height}
-        }
-        
+            "pdfText": pdf_text,
+            "chunks": chunks,
+            "images": extracted_images,
+            "storagePath": f'users/{user_id}/pdfs/{pdf_name}',
+            "fileUrl": file_url,
+            "uploadedAt": firestore.SERVER_TIMESTAMP
+        })
+
         return jsonify({
             "success": True,
             "pdf_name": pdf_name,
             "image_count": len(extracted_images),
-            "message": f"PDF '{pdf_name}' uploaded successfully with {len(extracted_images)} images"
+            "message": f"PDF '{pdf_name}' uploaded successfully for user '{user_id}'"
         }), 200
-    
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
+    
 @app.route('/api/list-pdfs', methods=['GET'])
 def list_pdfs():
     """List all uploaded PDFs"""
